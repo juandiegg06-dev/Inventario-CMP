@@ -1,13 +1,9 @@
 <?php
-// Si existen las variables de entorno de Railway (MYSQLHOST, etc.), se usan esas.
-// Si no existen (por ejemplo, cuando trabajas en tu computador local), se usan
-// los valores de respaldo de abajo (localhost:3307, root, sin contraseña).
-
-define('DB_HOST', getenv('MYSQLHOST') ?: 'localhost');
-define('DB_PORT', getenv('MYSQLPORT') ?: '3307');
-define('DB_USER', getenv('MYSQLUSER') ?: 'root');
-define('DB_PASS', getenv('MYSQLPASSWORD') ?: '');
-define('DB_NAME', getenv('MYSQLDATABASE') ?: 'inventario_cmp');
+define('DB_HOST', 'sql103.infinityfree.com');
+define('DB_PORT', '3306');
+define('DB_USER', 'if0_42885641');
+define('DB_PASS', 'wvx1qa7FEJlw');
+define('DB_NAME', 'if0_42885641_InvCmp');
 define('DB_CHARSET', 'utf8mb4');
 
 function getDB(): PDO {
