@@ -33,6 +33,9 @@ header{background:var(--gd);padding:0 1.75rem;height:60px;display:flex;align-ite
 .logo-text{font-size:1.08rem;font-weight:700;color:#fff;letter-spacing:-.015em;}
 .logo-text span{color:var(--gl);}
 .app{flex:1;display:flex;height:calc(100vh - 60px);overflow:hidden;}
+.nav-seg{display:flex;align-items:center;gap:.25rem;background:rgba(255,255,255,.08);padding:.25rem;border-radius:var(--rad);}
+.nav-seg .btn-ghost{background:none;color:rgba(255,255,255,.7);}
+.nav-seg .btn-ghost:hover{background:rgba(255,255,255,.1);color:#fff;}
 
 /* ---- Sidebar ---- */
 .left-panel{width:305px;min-width:265px;background:#fff;border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden;}
@@ -218,6 +221,28 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 .color-swatch{width:25px;height:25px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;transition:transform .15s var(--ease);}
 .color-swatch:hover{transform:scale(1.12);}
 .color-swatch.active{border-color:var(--tx);box-shadow:0 0 0 2px #fff inset;}
+
+/* ---- Responsive: tablet y movil ---- */
+@media (max-width:900px){
+  .grid-2{grid-template-columns:1fr;}
+}
+@media (max-width:768px){
+  .app{flex-direction:column;height:calc(100vh - 60px);}
+  .left-panel{width:100%;min-width:0;max-height:38vh;border-right:none;border-bottom:1px solid var(--bd);}
+  .right-panel{flex:1;min-height:0;}
+  .db{padding:1.5rem 1.25rem 2rem;}
+  .dh{padding:1.5rem 1.25rem;}
+  header{padding:0 1rem;}
+  .logo-text{font-size:.95rem;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:480px){
+  .form-grid, .form-grid.c3{grid-template-columns:1fr;}
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:.6rem;}
+  .nav-seg .btn span{display:none;}
+  .nav-seg .btn{padding:.55rem;}
+  .modal{padding:1.3rem;border-radius:var(--rad-lg);}
+}
 </style>
 </head>
 <body>
@@ -231,7 +256,7 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
     </svg>
     <span class="logo-text">Inv<span>CMP</span></span>
   </button>
-  <div style="display:flex;align-items:center;gap:.5rem">
+  <div class="nav-seg">
     <button class="btn btn-ghost" id="btnTareas" onclick="loadKanban()"><span>Tareas</span></button>
     <button class="btn btn-ghost" id="btnStats" onclick="loadDashboard()"><span>Estadísticas</span></button>
   </div>
@@ -510,6 +535,11 @@ async function loadDashboard(){
     ...(d.por_componente||[]).map(c=>({ic:deviceIcon(c.componente), n:c.total, label:compLabel(c.componente), tipo:'componente', componente:c.componente}))
   ];
 
+  const porArea = d.por_area || [];
+  const porComp = d.por_componente || [];
+  const maxArea = Math.max(1, ...porArea.map(a=>a.total));
+  const maxComp = Math.max(1, ...porComp.map(c=>c.total));
+
   const right = document.getElementById('rightPanel');
   right.innerHTML = `
     <div class="view-fade">
@@ -529,6 +559,27 @@ async function loadDashboard(){
             <div class="kpi-ic">${c.ic}</div>
             <div class="kpi-info"><div class="kpi-n">${c.n}</div><div class="kpi-l">${esc(c.label)}</div></div>
           </div>`).join('')}
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-h">${I.building}<span>Equipos por área</span></div>
+          ${porArea.length ? porArea.map(a=>`
+            <div class="bar-row">
+              <div class="bar-label">${esc(a.area)}</div>
+              <div class="bar-track"><div class="bar-fill" style="width:${Math.round(a.total/maxArea*100)}%"></div></div>
+              <div class="bar-n">${a.total}</div>
+            </div>`).join('') : '<div class="empty-state">Sin datos de áreas.</div>'}
+        </div>
+        <div class="panel">
+          <div class="panel-h">${I.disk}<span>Componentes registrados</span></div>
+          ${porComp.length ? porComp.map(c=>`
+            <div class="bar-row">
+              <div class="bar-label">${esc(compLabel(c.componente))}</div>
+              <div class="bar-track"><div class="bar-fill" style="width:${Math.round(c.total/maxComp*100)}%"></div></div>
+              <div class="bar-n">${c.total}</div>
+            </div>`).join('') : '<div class="empty-state">Sin datos.</div>'}
+        </div>
       </div>
     </div>
     </div>
