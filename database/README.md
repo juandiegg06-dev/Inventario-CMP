@@ -16,3 +16,9 @@ para correr el proyecto localmente con XAMPP.
    - Base de datos: `inventario_cmp`
 
 Listo, el proyecto debería funcionar apuntando a `http://localhost/Inventario-CMP/`.
+
+## Tabla `vigencias`
+
+Guarda licencias, garantías y suscripciones (de hardware o software) con su fecha de vencimiento, opcionalmente ligadas a un equipo.
+Se crea automáticamente la primera vez que se abre la página; `vigencias.sql` sirve para crearla a mano y ya viene incluida en `inventario_cmp.sql`.
+Estados: vigente, por vencer (30 días o menos) y vencida. Al eliminar una vigencia va a la papelera.

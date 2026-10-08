@@ -70,6 +70,106 @@ function agruparResponsables(PDO $pdo, string $q = ''): array {
     return $out;
 }
 
+// ---------------------------------------------------------------------------
+// Vigencias (licencias / garantías de hardware o software)
+// ---------------------------------------------------------------------------
+const VIGENCIA_ALERTA_DIAS = 30;
+
+/** Crea la tabla `vigencias` la primera vez que se necesita (instalaciones existentes). */
+function asegurarTablaVigencias(PDO $pdo): void {
+    static $listo = false;
+    if ($listo) return;
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `vigencias` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `equipo_id` int(11) DEFAULT NULL,
+  `tipo` enum('Software','Hardware') NOT NULL DEFAULT 'Software',
+  `nombre` varchar(200) NOT NULL,
+  `proveedor` varchar(150) DEFAULT NULL,
+  `referencia` varchar(250) DEFAULT NULL,
+  `fecha_inicio` date DEFAULT NULL,
+  `fecha_vencimiento` date NOT NULL,
+  `observaciones` text DEFAULT NULL,
+  `creado_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `deleted_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_vig_equipo` (`equipo_id`),
+  KEY `idx_vig_vencimiento` (`fecha_vencimiento`),
+  CONSTRAINT `fk_vig_equipo` FOREIGN KEY (`equipo_id`) REFERENCES `equipos` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+    $listo = true;
+}
+
+function responderError(int $codigo, string $msg): void {
+    http_response_code($codigo);
+    echo json_encode(['error' => $msg]);
+}
+
+function fechaValida(?string $f): bool {
+    if ($f === null || $f === '') return false;
+    $d = DateTime::createFromFormat('Y-m-d', $f);
+    return $d && $d->format('Y-m-d') === $f;
+}
+
+function textoOpcional($v, int $max): ?string {
+    $v = trim((string)($v ?? ''));
+    if ($v === '') return null;
+    return mb_substr($v, 0, $max);
+}
+
+/** Valida y normaliza el cuerpo de una vigencia. Devuelve [datos, error]. */
+function validarVigencia(PDO $pdo, array $b): array {
+    $nombre = textoOpcional($b['nombre'] ?? '', 200);
+    if ($nombre === null) return [null, 'El nombre es obligatorio.'];
+    $tipo = ($b['tipo'] ?? '') === 'Hardware' ? 'Hardware' : 'Software';
+    $venc = trim((string)($b['fecha_vencimiento'] ?? ''));
+    if (!fechaValida($venc)) return [null, 'La fecha de vencimiento no es válida.'];
+    $ini = trim((string)($b['fecha_inicio'] ?? ''));
+    if ($ini !== '') {
+        if (!fechaValida($ini)) return [null, 'La fecha de inicio no es válida.'];
+        if ($ini > $venc) return [null, 'La fecha de inicio no puede ser posterior al vencimiento.'];
+    } else {
+        $ini = null;
+    }
+    $equipoId = (int)($b['equipo_id'] ?? 0);
+    if ($equipoId > 0) {
+        $st = $pdo->prepare("SELECT 1 FROM equipos WHERE id = ? AND deleted_at IS NULL");
+        $st->execute([$equipoId]);
+        if (!$st->fetchColumn()) return [null, 'El equipo seleccionado no existe.'];
+    } else {
+        $equipoId = null;
+    }
+    return [[
+        'equipo_id' => $equipoId,
+        'tipo' => $tipo,
+        'nombre' => $nombre,
+        'proveedor' => textoOpcional($b['proveedor'] ?? '', 150),
+        'referencia' => textoOpcional($b['referencia'] ?? '', 250),
+        'fecha_inicio' => $ini,
+        'fecha_vencimiento' => $venc,
+        'observaciones' => textoOpcional($b['observaciones'] ?? '', 2000),
+    ], null];
+}
+
+/** Añade estado (vigente / por_vencer / vencida) y días restantes a cada fila. */
+function conEstadoVigencia(array $rows): array {
+    $hoy = new DateTime('today');
+    foreach ($rows as &$r) {
+        $dias = (int)$hoy->diff(new DateTime($r['fecha_vencimiento']))->format('%r%a');
+        $r['dias_restantes'] = $dias;
+        $r['estado'] = $dias < 0 ? 'vencida' : ($dias <= VIGENCIA_ALERTA_DIAS ? 'por_vencer' : 'vigente');
+    }
+    unset($r);
+    return $rows;
+}
+
+const VIGENCIA_SELECT = "SELECT v.id, v.equipo_id, v.tipo, v.nombre, v.proveedor, v.referencia,
+        v.fecha_inicio, v.fecha_vencimiento, v.observaciones,
+        e.responsable AS equipo_responsable, e.marca AS equipo_marca, e.modelo AS equipo_modelo
+    FROM vigencias v
+    LEFT JOIN equipos e ON e.id = v.equipo_id AND e.deleted_at IS NULL";
+
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
@@ -89,6 +189,7 @@ switch ($action) {
     case 'responsable':
         $resp = trim($_GET['nombre'] ?? '');
         $pdo  = getDB();
+        asegurarTablaVigencias($pdo);
 
         $stmt = $pdo->prepare("SELECT * FROM equipos WHERE LOWER(TRIM(responsable)) = LOWER(?) AND componente = 'Equipo de computo' AND equipo_padre_id IS NULL AND deleted_at IS NULL ORDER BY item ASC");
         $stmt->execute([$resp]);
@@ -108,6 +209,9 @@ switch ($action) {
             $sw = $pdo->prepare("SELECT id, programa, version FROM software WHERE equipo_id = ? AND deleted_at IS NULL ORDER BY programa");
             $sw->execute([$eq['id']]);
             $eq['software'] = $sw->fetchAll();
+            $vg = $pdo->prepare("SELECT id, tipo, nombre, proveedor, referencia, fecha_inicio, fecha_vencimiento FROM vigencias WHERE equipo_id = ? AND deleted_at IS NULL ORDER BY fecha_vencimiento");
+            $vg->execute([$eq['id']]);
+            $eq['vigencias'] = conEstadoVigencia($vg->fetchAll());
         }
         unset($eq);
 
@@ -306,7 +410,11 @@ switch ($action) {
         $tareas = $pdo->query("
             SELECT id, titulo, descripcion, deleted_at
             FROM tareas WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")->fetchAll();
-        echo json_encode(['equipos' => $equipos, 'software' => $software, 'tareas' => $tareas]);
+        asegurarTablaVigencias($pdo);
+        $vigencias = $pdo->query("
+            SELECT id, tipo, nombre, proveedor, fecha_vencimiento, deleted_at
+            FROM vigencias WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")->fetchAll();
+        echo json_encode(['equipos' => $equipos, 'software' => $software, 'tareas' => $tareas, 'vigencias' => $vigencias]);
         break;
 
     case 'restore_equipo':
@@ -392,6 +500,8 @@ switch ($action) {
         $pdo->exec("DELETE FROM software WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM equipos WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM tareas WHERE deleted_at IS NOT NULL");
+        asegurarTablaVigencias($pdo);
+        $pdo->exec("DELETE FROM vigencias WHERE deleted_at IS NOT NULL");
         echo json_encode(['ok' => true]);
         break;
 
@@ -449,6 +559,66 @@ switch ($action) {
         echo json_encode(['ok'=>true]);
         break;
 
+    // ----- Vigencias -----
+    case 'vigencias':
+        $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        $rows = $pdo->query(VIGENCIA_SELECT . " WHERE v.deleted_at IS NULL ORDER BY v.fecha_vencimiento ASC, v.nombre ASC")->fetchAll();
+        echo json_encode(['vigencias' => conEstadoVigencia($rows), 'alerta_dias' => VIGENCIA_ALERTA_DIAS]);
+        break;
+
+    case 'get_vigencia':
+        $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        $st = $pdo->prepare("SELECT * FROM vigencias WHERE id = ? AND deleted_at IS NULL");
+        $st->execute([(int)($_GET['id'] ?? 0)]);
+        $r = $st->fetch();
+        if (!$r) { responderError(404, 'Vigencia no encontrada.'); break; }
+        echo json_encode(['vigencia' => $r]);
+        break;
+
+    case 'crear_vigencia':
+    case 'actualizar_vigencia':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        [$d, $err] = validarVigencia($pdo, $body);
+        if ($err) { responderError(400, $err); break; }
+        if ($action === 'crear_vigencia') {
+            $pdo->prepare("INSERT INTO vigencias (equipo_id,tipo,nombre,proveedor,referencia,fecha_inicio,fecha_vencimiento,observaciones) VALUES (?,?,?,?,?,?,?,?)")
+                ->execute(array_values($d));
+            echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
+        } else {
+            $id = (int)($body['id'] ?? 0);
+            $st = $pdo->prepare("UPDATE vigencias SET equipo_id=?,tipo=?,nombre=?,proveedor=?,referencia=?,fecha_inicio=?,fecha_vencimiento=?,observaciones=? WHERE id=? AND deleted_at IS NULL");
+            $st->execute(array_merge(array_values($d), [$id]));
+            echo json_encode(['ok' => true]);
+        }
+        break;
+
+    case 'eliminar_vigencia':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        $pdo->prepare("UPDATE vigencias SET deleted_at = NOW() WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'restore_vigencia':
+        $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        $pdo->prepare("UPDATE vigencias SET deleted_at = NULL WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'delete_vigencia_permanente':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        $pdo->prepare("DELETE FROM vigencias WHERE id = ? AND deleted_at IS NOT NULL")->execute([(int)($body['id'] ?? 0)]);
+        echo json_encode(['ok' => true]);
+        break;
+
     case 'stats':
         $pdo = getDB();
         $grupos = agruparResponsables($pdo);
@@ -500,7 +670,16 @@ switch ($action) {
             ORDER BY total DESC
         ")->fetchAll();
 
-        echo json_encode(compact('resp','equipos','areas','perifericos','lista_resp','lista_areas','lista_eq','por_area','por_componente'));
+        asegurarTablaVigencias($pdo);
+        $vig = conEstadoVigencia($pdo->query("SELECT fecha_vencimiento FROM vigencias WHERE deleted_at IS NULL")->fetchAll());
+        $vigencias = ['total' => count($vig), 'vencidas' => 0, 'por_vencer' => 0, 'vigentes' => 0];
+        foreach ($vig as $v) {
+            if ($v['estado'] === 'vencida') $vigencias['vencidas']++;
+            elseif ($v['estado'] === 'por_vencer') $vigencias['por_vencer']++;
+            else $vigencias['vigentes']++;
+        }
+
+        echo json_encode(compact('resp','equipos','areas','perifericos','lista_resp','lista_areas','lista_eq','por_area','por_componente','vigencias'));
         break;
 
     default:

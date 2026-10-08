@@ -222,6 +222,44 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 .color-swatch:hover{transform:scale(1.12);}
 .color-swatch.active{border-color:var(--tx);box-shadow:0 0 0 2px #fff inset;}
 
+
+/* ---- Vigencias ---- */
+.vg-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem;margin-bottom:1.3rem;}
+.vg-tile{text-align:left;background:#fff;border:1px solid var(--bd);border-radius:var(--rad-lg);padding:1rem 1.15rem;cursor:pointer;box-shadow:var(--shadow);font-family:inherit;color:var(--tx);display:flex;flex-direction:column;gap:.3rem;transition:border-color .15s,box-shadow .15s;}
+.vg-tile:hover{box-shadow:var(--shadow-lift);}
+.vg-tile.active{border-color:var(--gl);box-shadow:var(--ring);}
+.vg-tile-n{font-size:1.5rem;font-weight:700;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.vg-tile-l{font-size:.7rem;font-weight:500;color:var(--tm);display:flex;align-items:center;gap:.4rem;}
+.vg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--tm);}
+.vg-dot.vigente{background:#3FAF29;}
+.vg-dot.por_vencer{background:#D4A017;}
+.vg-dot.vencida{background:#E5484D;}
+.vg-toolbar{display:flex;gap:.6rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap;}
+.vg-toolbar .sw-wrap{flex:1;min-width:200px;}
+.vg-toolbar select{padding:.6rem .72rem;border:1px solid var(--bd);border-radius:var(--rad);font-family:'Inter';font-size:.78rem;color:var(--tx);background:var(--of);outline:none;}
+.vg-table-wrap{background:#fff;border:1px solid var(--bd);border-radius:var(--rad-lg);box-shadow:var(--shadow);overflow-x:auto;}
+.vgt{width:100%;border-collapse:collapse;font-size:.78rem;min-width:720px;}
+.vgt th{text-align:left;padding:.75rem 1rem;color:var(--tm);border-bottom:1px solid var(--bd);font-weight:600;font-size:.63rem;text-transform:uppercase;letter-spacing:.04em;background:var(--of);white-space:nowrap;}
+.vgt td{padding:.8rem 1rem;border-bottom:1px solid var(--bd);vertical-align:middle;}
+.vgt tr:last-child td{border-bottom:none;}
+.vgt tbody tr:hover{background:var(--of);}
+.vg-name{font-weight:600;color:var(--tx);}
+.vg-sub{font-size:.68rem;color:var(--tm);margin-top:.15rem;overflow-wrap:anywhere;}
+.vg-type{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;color:var(--tx);white-space:nowrap;}
+.vg-type .ic{color:var(--gk);}
+.vg-date{white-space:nowrap;font-variant-numeric:tabular-nums;}
+.vg-actions{display:flex;gap:.3rem;justify-content:flex-end;}
+.vg-badge{display:inline-flex;align-items:center;gap:.4rem;font-size:.68rem;font-weight:600;padding:.22rem .6rem;border-radius:20px;white-space:nowrap;background:var(--mu);color:var(--gk);}
+.vg-badge.por_vencer{background:#FFF6DB;color:#8A6500;}
+.vg-badge.vencida{background:#FDEDED;color:#B42318;}
+.vg-item{display:flex;align-items:center;gap:.65rem;background:var(--of);border:1px solid var(--bd);border-radius:var(--rad);padding:.62rem .78rem;}
+.vg-item + .vg-item{margin-top:.45rem;}
+.vg-item-body{flex:1;min-width:0;}
+.vg-alert{display:inline-flex;align-items:center;gap:.35rem;font-size:.66rem;font-weight:600;color:#B42318;}
+.kpi-card .vg-alert{margin-top:.2rem;}
+.kpi-card .vg-warn{color:#8A6500;}
+@media (max-width:900px){.vg-tiles{grid-template-columns:repeat(2,1fr);}}
+
 /* ---- Responsive: tablet y movil ---- */
 @media (max-width:900px){
   .grid-2{grid-template-columns:1fr;}
@@ -258,6 +296,7 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
   </button>
   <div class="nav-seg">
     <button class="btn btn-ghost" id="btnTareas" onclick="loadKanban()"><span>Tareas</span></button>
+    <button class="btn btn-ghost" id="btnVigencias" onclick="loadVigencias()"><span>Vigencias</span></button>
     <button class="btn btn-ghost" id="btnStats" onclick="loadDashboard()"><span>Estadísticas</span></button>
   </div>
 </header>
@@ -443,6 +482,32 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
   </div>
 </div>
 
+<div class="modal-bg" id="modalVigencia" style="display:none" onclick="if(event.target===this)closeModal('modalVigencia')">
+  <div class="modal" style="max-width:560px">
+    <h3 id="vigModalTitle"><span>Nueva vigencia</span></h3>
+    <div class="modal-sub">Licencia, garantía o suscripción de hardware o software con su fecha de vencimiento.</div>
+    <input type="hidden" id="vigId">
+    <div class="form-grid">
+      <div class="fg"><label>Tipo</label>
+        <select id="vigTipo"><option value="Software">Software</option><option value="Hardware">Hardware</option></select>
+      </div>
+      <div class="fg"><label>Equipo asociado</label>
+        <select id="vigEquipo"><option value="">Sin equipo (general)</option></select>
+      </div>
+      <div class="fg full"><label>Nombre *</label><input id="vigNombre" maxlength="200" placeholder="Ej: Microsoft 365, Garantía Dell, Antivirus"></div>
+      <div class="fg"><label>Proveedor</label><input id="vigProveedor" maxlength="150" placeholder="Ej: Microsoft"></div>
+      <div class="fg"><label>Clave / Referencia</label><input id="vigReferencia" maxlength="250" placeholder="Clave, contrato o n.º de serie"></div>
+      <div class="fg"><label>Fecha de inicio</label><input id="vigInicio" type="date"></div>
+      <div class="fg"><label>Fecha de vencimiento *</label><input id="vigVence" type="date"></div>
+      <div class="fg full"><label>Observaciones</label><textarea id="vigObs" maxlength="2000" placeholder="Notas adicionales (opcional)..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalVigencia')">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarVigencia" onclick="guardarVigencia()"><span>Guardar</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -477,6 +542,8 @@ const I = {
   close:    svg('<path d="M18 6 6 18M6 6l12 12"/>', 12),
   gear:     svg('<circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8 7 17M17 7l2.8-2.8"/>'),
   kanban:   svg('<rect x="3" y="3" width="6" height="18" rx="1.2"/><rect x="10" y="3" width="6" height="11" rx="1.2"/><rect x="17" y="3" width="4" height="7" rx="1.2"/>'),
+  calendar: svg('<rect x="3" y="4.5" width="18" height="16" rx="1.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>'),
+  alert:    svg('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>', 14),
   chart:    svg('<path d="M4 20V11M12 20V4M20 20v-8"/>'),
   chevLeft: svg('<path d="M15 18l-6-6 6-6"/>', 14),
   chevRight:svg('<path d="M9 18l6-6-6-6"/>', 14),
@@ -524,8 +591,19 @@ function closeModal(id){ document.getElementById(id).style.display='none'; }
 function esc(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ============ DASHBOARD ============ */
+function vigKpiHTML(v){
+  if(!v) return '';
+  const aviso = v.vencidas > 0
+    ? `<div class="vg-alert">${I.alert}<span>${v.vencidas} vencida${v.vencidas==1?'':'s'}</span></div>`
+    : (v.por_vencer > 0 ? `<div class="vg-alert vg-warn">${I.alert}<span>${v.por_vencer} por vencer</span></div>` : '');
+  return `<div class="kpi-card" onclick="loadVigencias()">
+    <div class="kpi-ic">${I.calendar}</div>
+    <div class="kpi-info"><div class="kpi-n">${v.total}</div><div class="kpi-l">Vigencias</div>${aviso}</div>
+  </div>`;
+}
+
 async function loadDashboard(){
-  activeUser = null;
+  activeUser = null; vigViewActiva = false;
   document.querySelectorAll('.pc.active').forEach(el=>el.classList.remove('active'));
   const d = await api({action:'stats'});
 
@@ -554,6 +632,7 @@ async function loadDashboard(){
     </div>
     <div class="db">
       <div class="kpi-grid">
+        ${vigKpiHTML(d.vigencias)}
         ${cards.map(c=>`
           <div class="kpi-card" onclick="openKpiModal('${c.tipo}'${c.componente?`,'${esc(c.componente).replace(/'/g,"\\'")}'`:''})">
             <div class="kpi-ic">${c.ic}</div>
@@ -639,6 +718,7 @@ function togglePeopleList(forceOpen=null){
 
 /* ============ VISTA DETALLE USUARIO ============ */
 async function verUsuario(nombre){
+  vigViewActiva = false;
   activeUser = nombre;
   const d = await api({action:'responsable', nombre});
   const rp = document.getElementById('rightPanel');
@@ -746,6 +826,19 @@ async function verUsuario(nombre){
           <tbody>${swRows || '<tr><td colspan="3" class="empty-state">Sin software registrado.</td></tr>'}</tbody>
         </table>
         ${swBtn}
+
+        <div class="sec-label">
+          <span class="sec-label-txt">${I.calendar}<span>Vigencias (${(eq.vigencias||[]).length})</span></span>
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalVigencia(null, ${eq.id})">${I.plus}<span>Agregar</span></button>
+        </div>
+        ${(eq.vigencias||[]).map(v=>`<div class="vg-item">
+          <div class="periph-ic">${v.tipo==='Hardware' ? I.chip : I.disk}</div>
+          <div class="vg-item-body">
+            <div class="periph-name">${esc(v.nombre)}</div>
+            <div class="vg-sub">${esc(v.tipo)}${v.proveedor ? ' · '+esc(v.proveedor) : ''} · Vence: ${fmtFecha(v.fecha_vencimiento)}</div>
+          </div>
+          ${vigBadge(v)}
+        </div>`).join('') || '<div class="empty-state">Sin vigencias registradas.</div>'}
       </div>
     </details>
     </div>`;
@@ -911,6 +1004,154 @@ async function borrarSoftware(id, resp){
   }
 }
 
+/* ============ VIGENCIAS ============ */
+let vigData = [];
+let vigFiltro = 'todas';
+let vigViewActiva = false;
+
+function fmtFecha(f){
+  if(!f) return '—';
+  const [y,m,d] = String(f).split('-');
+  return `${d}/${m}/${y}`;
+}
+function vigTextoDias(v){
+  const n = v.dias_restantes;
+  if(n < 0) return `Venció hace ${-n} día${n===-1?'':'s'}`;
+  if(n === 0) return 'Vence hoy';
+  return `Faltan ${n} día${n===1?'':'s'}`;
+}
+function vigBadge(v){
+  const label = v.estado === 'vencida' ? 'Vencida' : (v.estado === 'por_vencer' ? 'Por vencer' : 'Vigente');
+  return `<span class="vg-badge ${v.estado}" title="${esc(vigTextoDias(v))}"><span class="vg-dot ${v.estado}"></span>${label}</span>`;
+}
+
+async function loadVigencias(){
+  activeUser = null; vigViewActiva = true;
+  document.querySelectorAll('.pc.active').forEach(el=>el.classList.remove('active'));
+  document.getElementById('rightPanel').innerHTML = `
+    <div class="view-fade">
+    <div class="dh">
+      <div class="dh-top">
+        <div class="dh-ic">${I.calendar}</div>
+        <div style="flex:1;min-width:0">
+          <div class="dhn">Vigencias</div>
+          <div class="dhs">Licencias y garantías de hardware y software</div>
+        </div>
+        <button class="btn btn-primary" onclick="abrirModalVigencia()">${I.plus}<span>Nueva vigencia</span></button>
+      </div>
+    </div>
+    <div class="db">
+      <div class="vg-tiles" id="vigTiles"></div>
+      <div class="vg-toolbar">
+        <div class="sw-wrap"><span class="sic">${I.search}</span><input class="si" id="vigBuscar" type="text" placeholder="Buscar por nombre, proveedor, equipo o referencia..." oninput="renderVigTabla()"></div>
+        <select id="vigFiltroTipo" onchange="renderVigTabla()"><option value="">Todos los tipos</option><option value="Software">Software</option><option value="Hardware">Hardware</option></select>
+      </div>
+      <div class="vg-table-wrap" id="vigTabla"></div>
+    </div>
+    </div>`;
+  await refreshVigencias();
+}
+
+async function refreshVigencias(){
+  const d = await api({action:'vigencias'});
+  vigData = d.vigencias || [];
+  renderVigTiles();
+  renderVigTabla();
+}
+
+function renderVigTiles(){
+  const c = { todas: vigData.length, vigente:0, por_vencer:0, vencida:0 };
+  vigData.forEach(v=>c[v.estado]++);
+  const tiles = [
+    ['todas','Todas',c.todas],['vigente','Vigentes',c.vigente],
+    ['por_vencer','Por vencer (30 días)',c.por_vencer],['vencida','Vencidas',c.vencida]
+  ];
+  const el = document.getElementById('vigTiles');
+  if(!el) return;
+  el.innerHTML = tiles.map(([k,l,n])=>`
+    <button class="vg-tile ${vigFiltro===k?'active':''}" onclick="setVigFiltro('${k}')">
+      <span class="vg-tile-n">${n}</span>
+      <span class="vg-tile-l">${k!=='todas' ? `<span class="vg-dot ${k}"></span>` : ''}${l}</span>
+    </button>`).join('');
+}
+function setVigFiltro(k){ vigFiltro = k; renderVigTiles(); renderVigTabla(); }
+
+function renderVigTabla(){
+  const box = document.getElementById('vigTabla');
+  if(!box) return;
+  const q = (document.getElementById('vigBuscar')?.value || '').trim().toLowerCase();
+  const tipo = document.getElementById('vigFiltroTipo')?.value || '';
+  const rows = vigData.filter(v=>{
+    if(vigFiltro !== 'todas' && v.estado !== vigFiltro) return false;
+    if(tipo && v.tipo !== tipo) return false;
+    if(!q) return true;
+    return [v.nombre, v.proveedor, v.referencia, v.equipo_responsable, v.equipo_marca, v.equipo_modelo]
+      .some(x => x && String(x).toLowerCase().includes(q));
+  });
+  if(!rows.length){
+    box.innerHTML = `<div class="empty-state" style="padding:1.6rem;text-align:center">${vigData.length ? 'Ninguna vigencia coincide con el filtro.' : 'Aún no hay vigencias registradas. Usa “Nueva vigencia” para agregar la primera.'}</div>`;
+    return;
+  }
+  box.innerHTML = `<table class="vgt">
+    <thead><tr><th>Licencia</th><th>Tipo</th><th>Equipo</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rows.map(v=>`<tr>
+      <td><div class="vg-name">${esc(v.nombre)}</div><div class="vg-sub">${[v.proveedor, v.referencia].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div></td>
+      <td><span class="vg-type">${v.tipo==='Hardware' ? I.chip : I.disk}${esc(v.tipo)}</span></td>
+      <td>${v.equipo_id && v.equipo_responsable ? `<div class="vg-name">${esc(v.equipo_responsable)}</div><div class="vg-sub">${esc([v.equipo_marca, v.equipo_modelo].filter(Boolean).join(' '))}</div>` : '<span class="vg-sub">General</span>'}</td>
+      <td class="vg-date"><div class="vg-name">${fmtFecha(v.fecha_vencimiento)}</div><div class="vg-sub">${esc(vigTextoDias(v))}</div></td>
+      <td>${vigBadge(v)}</td>
+      <td><div class="vg-actions">
+        <button class="btn btn-ghost btn-sm" onclick="abrirModalVigencia(${v.id})" title="Editar">${I.gear}</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarVigencia(${v.id})" title="Enviar a la papelera">${I.trash}</button>
+      </div></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function abrirModalVigencia(id=null, equipoId=null){
+  const sel = document.getElementById('vigEquipo');
+  const eq = await api({action:'buscar_equipos'});
+  sel.innerHTML = '<option value="">Sin equipo (general)</option>' + (eq.equipos||[]).map(e=>
+    `<option value="${e.id}">${esc(e.responsable)||'Sin responsable'} — ${esc([e.marca,e.modelo].filter(Boolean).join(' '))||'Equipo'}${e.serial?' ('+esc(e.serial)+')':''}</option>`).join('');
+  const set = (k,v)=>{ document.getElementById(k).value = v ?? ''; };
+  set('vigId',''); set('vigTipo','Software'); set('vigEquipo', equipoId||''); set('vigNombre','');
+  set('vigProveedor',''); set('vigReferencia',''); set('vigInicio',''); set('vigVence',''); set('vigObs','');
+  document.getElementById('vigModalTitle').innerHTML = I.calendar + '<span>' + (id ? 'Editar vigencia' : 'Nueva vigencia') + '</span>';
+  if(id){
+    const r = await api({action:'get_vigencia', id});
+    if(r.error){ toast(r.error, I.close); return; }
+    const v = r.vigencia;
+    set('vigId',v.id); set('vigTipo',v.tipo); set('vigEquipo',v.equipo_id||''); set('vigNombre',v.nombre);
+    set('vigProveedor',v.proveedor); set('vigReferencia',v.referencia); set('vigInicio',v.fecha_inicio);
+    set('vigVence',v.fecha_vencimiento); set('vigObs',v.observaciones);
+  }
+  document.getElementById('modalVigencia').style.display = 'flex';
+}
+
+async function guardarVigencia(){
+  const g = k => document.getElementById(k).value;
+  const id = g('vigId');
+  const body = {
+    tipo: g('vigTipo'), equipo_id: g('vigEquipo'), nombre: g('vigNombre'), proveedor: g('vigProveedor'),
+    referencia: g('vigReferencia'), fecha_inicio: g('vigInicio'), fecha_vencimiento: g('vigVence'), observaciones: g('vigObs')
+  };
+  if(!body.nombre.trim()){ toast('El nombre es obligatorio', I.close); return; }
+  if(!body.fecha_vencimiento){ toast('Indica la fecha de vencimiento', I.close); return; }
+  if(id) body.id = Number(id);
+  const res = await api({action: id ? 'actualizar_vigencia' : 'crear_vigencia'}, body);
+  if(res && res.error){ toast(res.error, I.close); return; }
+  closeModal('modalVigencia');
+  toast(id ? 'Vigencia actualizada' : 'Vigencia registrada');
+  if(vigViewActiva && document.getElementById('vigTabla')) refreshVigencias();
+  else if(activeUser) verUsuario(activeUser);
+}
+
+async function eliminarVigencia(id){
+  if(!confirm('¿Enviar esta vigencia a la papelera?')) return;
+  await api({action:'eliminar_vigencia'}, {id});
+  toast('Vigencia enviada a la papelera', I.trash);
+  refreshVigencias();
+}
+
 /* ============ PAPELERA ============ */
 const COMPONENTE_LABEL = {'Equipo de computo':'Equipos de cómputo','Mouse':'Mouse','Teclado':'Teclados','Monitor':'Monitores','Otro':'Otros'};
 const COMPONENTE_ORDEN = ['Equipo de computo','Mouse','Teclado','Monitor','Otro'];
@@ -979,6 +1220,20 @@ function papItemTareaHTML(t){
   </div>`;
 }
 
+function papItemVigenciaHTML(v){
+  return `<div class="pap-item">
+    <div class="pap-item-ic">${I.calendar}</div>
+    <div class="pap-item-body">
+      <div class="pap-item-title">${esc(v.nombre)}</div>
+      <div class="pap-item-meta">${esc(v.tipo)}${v.proveedor ? ' · '+esc(v.proveedor) : ''} · Vencía: ${fmtFecha(v.fecha_vencimiento)} · Eliminada: ${esc(v.deleted_at)}</div>
+    </div>
+    <div class="pap-item-actions">
+      <button class="btn btn-primary btn-sm" onclick="restaurar('vigencia', ${v.id})" title="Restaurar">${I.refresh}</button>
+      <button class="btn btn-danger btn-sm" onclick="borrarPermanente('vigencia', ${v.id})" title="Eliminar definitivamente">${I.trash}</button>
+    </div>
+  </div>`;
+}
+
 async function abrirPapelera(){
   const d = await api({action:'papelera'});
   let html = '';
@@ -1002,7 +1257,11 @@ async function abrirPapelera(){
     html += papSeccionHTML(I.kanban, 'Tareas', d.tareas.map(papItemTareaHTML).join(''), d.tareas.length);
   }
 
-  const totalPapelera = (d.equipos||[]).length + (d.software||[]).length + (d.tareas||[]).length;
+  if((d.vigencias||[]).length){
+    html += papSeccionHTML(I.calendar, 'Vigencias', d.vigencias.map(papItemVigenciaHTML).join(''), d.vigencias.length);
+  }
+
+  const totalPapelera = (d.equipos||[]).length + (d.software||[]).length + (d.tareas||[]).length + (d.vigencias||[]).length;
   if(!totalPapelera) html = `<div class="empty-state">La papelera está vacía.</div>`;
 
   document.getElementById('papeleraContent').innerHTML = html;
@@ -1020,7 +1279,8 @@ async function vaciarPapelera(){
 
 async function borrarPermanente(tipo, id){
   if(!confirm('Esto eliminará el elemento definitivamente. Esta acción no se puede deshacer. ¿Continuar?')) return;
-  const action = tipo === 'equipo' ? 'delete_equipo_permanente' : (tipo === 'software' ? 'delete_software_permanente' : 'delete_tarea_permanente');
+  const permMap = { equipo:'delete_equipo_permanente', software:'delete_software_permanente', tarea:'delete_tarea_permanente', vigencia:'delete_vigencia_permanente' };
+  const action = permMap[tipo];
   const res = await api({action}, {id});
   if(res && res.error){ toast(res.error, I.close); return; }
   toast('Elemento eliminado definitivamente', I.trash);
@@ -1028,7 +1288,7 @@ async function borrarPermanente(tipo, id){
 }
 
 async function restaurar(tipo, id){
-  const actionMap = { equipo: 'restore_equipo', software: 'restore_software', tarea: 'restore_tarea' };
+  const actionMap = { equipo: 'restore_equipo', software: 'restore_software', tarea: 'restore_tarea', vigencia: 'restore_vigencia' };
   const res = await api({action: actionMap[tipo]}, {id});
   if(res && res.error){ toast(res.error, I.close); return; }
   toast('Elemento restaurado', I.refresh);
@@ -1036,11 +1296,12 @@ async function restaurar(tipo, id){
   loadResponsables();
   if(activeUser) verUsuario(activeUser); else loadDashboard();
   if(tipo === 'tarea') refreshKanban();
+  if(tipo === 'vigencia' && vigViewActiva) loadVigencias();
 }
 
 /* ============ TABLERO KANBAN (TAREAS) ============ */
 async function loadKanban(){
-  activeUser = null;
+  activeUser = null; vigViewActiva = false;
   document.querySelectorAll('.pc.active').forEach(el=>el.classList.remove('active'));
   const rp = document.getElementById('rightPanel');
   rp.innerHTML = `
@@ -1176,6 +1437,7 @@ async function borrarTarea(id){
 
 /* ============ INIT ============ */
 document.getElementById('btnTareas').innerHTML = I.kanban + '<span>Tareas</span>';
+document.getElementById('btnVigencias').innerHTML = I.calendar + '<span>Vigencias</span>';
 document.getElementById('btnStats').innerHTML = I.chart + '<span>Estadísticas</span>';
 document.getElementById('searchIcon').innerHTML = I.search;
 document.getElementById('tpIcon').innerHTML = I.users;
