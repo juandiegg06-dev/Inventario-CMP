@@ -837,6 +837,22 @@ switch ($action) {
         echo json_encode(['ok' => true, 'lectura' => $fila]);
         break;
 
+    case 'borrar_lectura':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $pdo->prepare("DELETE FROM impresora_lecturas WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'vaciar_lecturas':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $pdo->prepare("DELETE FROM impresora_lecturas WHERE impresora_id = ?")->execute([(int)($body['id'] ?? 0)]);
+        echo json_encode(['ok' => true]);
+        break;
+
     case 'lecturas_impresora':
         $pdo = getDB();
         asegurarTablasImpresoras($pdo);

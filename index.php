@@ -1091,7 +1091,8 @@ async function loadImpresoras(){
       </div>
       <div id="impMsg"></div>
       <div id="impActual"></div>
-      <div class="panel-h" style="margin-top:.4rem">${I.calendar}<span>Historial de lecturas</span></div>
+      <div class="panel-h" style="margin-top:.4rem;justify-content:space-between"><span style="display:flex;align-items:center;gap:.55rem">${I.calendar}<span>Historial de lecturas</span></span>
+        <button class="btn btn-danger btn-sm" id="btnBorrarHist" onclick="borrarHistorialImp()" style="display:none">${I.trash}<span>Borrar historial</span></button></div>
       <div class="vg-table-wrap" id="impHistorial"></div>
     </div>
     </div>`;
@@ -1117,16 +1118,33 @@ async function cargarLecturasImp(){
   if(!rows.length){
     document.getElementById('impActual').innerHTML = '<div class="empty-state" style="padding:.4rem 0 1.2rem">Aún no hay lecturas. Pulsa “Consultar ahora” para leer los contadores de la impresora.</div>';
     hist.innerHTML = '<div class="empty-state" style="padding:1.4rem;text-align:center">Sin historial.</div>';
+    const bb0 = document.getElementById('btnBorrarHist'); if(bb0) bb0.style.display = 'none';
     return;
   }
   renderImpActual(rows[0]);
   hist.innerHTML = `<table class="vgt" style="min-width:0">
-    <thead><tr><th>Fecha</th><th>Hora</th><th class="num">Copia (Color)</th><th class="num">Copia (B/N)</th><th class="num">Impresión (Color)</th><th class="num">Impresión (B/N)</th><th class="num">Escaneado (Color)</th><th class="num">Escaneado (B/N)</th></tr></thead>
+    <thead><tr><th>Fecha</th><th>Hora</th><th class="num">Copia (Color)</th><th class="num">Copia (B/N)</th><th class="num">Impresión (Color)</th><th class="num">Impresión (B/N)</th><th class="num">Escaneado (Color)</th><th class="num">Escaneado (B/N)</th><th></th></tr></thead>
     <tbody>${rows.map(r=>{const t=fmtFH(r.fecha_hora);return `<tr>
       <td class="vg-date">${t.f}</td><td class="vg-date">${t.h}</td>
       <td class="num">${fmtNum(r.copia_color)}</td><td class="num">${fmtNum(r.copia_bn)}</td>
       <td class="num">${fmtNum(r.impresion_color)}</td><td class="num">${fmtNum(r.impresion_bn)}</td>
-      <td class="num">${fmtNum(r.escaneo_color)}</td><td class="num">${fmtNum(r.escaneo_bn)}</td></tr>`;}).join('')}</tbody></table>`;
+      <td class="num">${fmtNum(r.escaneo_color)}</td><td class="num">${fmtNum(r.escaneo_bn)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="borrarLecturaImp(${r.id})" title="Borrar esta lectura">${I.trash}</button></td></tr>`;}).join('')}</tbody></table>`;
+  const bb = document.getElementById('btnBorrarHist'); if(bb) bb.style.display = 'inline-flex';
+}
+
+async function borrarLecturaImp(id){
+  if(!confirm('¿Borrar esta lectura?')) return;
+  await api({action:'borrar_lectura'}, {id});
+  toast('Lectura borrada', I.trash);
+  cargarLecturasImp();
+}
+
+async function borrarHistorialImp(){
+  if(!impSel || !confirm('¿Borrar todo el historial de lecturas de esta impresora?')) return;
+  await api({action:'vaciar_lecturas'}, {id: impSel});
+  toast('Historial borrado', I.trash);
+  cargarLecturasImp();
 }
 
 function renderImpActual(l){
