@@ -224,6 +224,12 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 
 
 /* ---- Vigencias ---- */
+.form-grid > *{min-width:0;}
+.fg input,.fg select,.fg textarea{width:100%;min-width:0;box-sizing:border-box;}
+.vg-quick{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin:-.2rem 0 .7rem;}
+.vg-quick-l{font-size:.64rem;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.03em;margin-right:.2rem;}
+.vg-chip{border:1px solid var(--bd);background:var(--of);color:var(--gk);border-radius:20px;padding:.3rem .75rem;font-family:inherit;font-size:.72rem;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;}
+.vg-chip:hover{background:var(--mu);border-color:var(--gl);}
 .vg-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem;margin-bottom:1.3rem;}
 .vg-tile{text-align:left;background:#fff;border:1px solid var(--bd);border-radius:var(--rad-lg);padding:1rem 1.15rem;cursor:pointer;box-shadow:var(--shadow);font-family:inherit;color:var(--tx);display:flex;flex-direction:column;gap:.3rem;transition:border-color .15s,box-shadow .15s;}
 .vg-tile:hover{box-shadow:var(--shadow-lift);}
@@ -499,6 +505,14 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
       <div class="fg"><label>Clave / Referencia</label><input id="vigReferencia" maxlength="250" placeholder="Clave, contrato o n.º de serie"></div>
       <div class="fg"><label>Fecha de inicio</label><input id="vigInicio" type="date"></div>
       <div class="fg"><label>Fecha de vencimiento *</label><input id="vigVence" type="date"></div>
+      <div class="vg-quick full" style="grid-column:1/-1">
+        <span class="vg-quick-l">Vence en</span>
+        <button type="button" class="vg-chip" onclick="vigSumar(3)">3 meses</button>
+        <button type="button" class="vg-chip" onclick="vigSumar(6)">6 meses</button>
+        <button type="button" class="vg-chip" onclick="vigSumar(12)">1 año</button>
+        <button type="button" class="vg-chip" onclick="vigSumar(24)">2 años</button>
+        <button type="button" class="vg-chip" onclick="vigSumar(36)">3 años</button>
+      </div>
       <div class="fg full"><label>Observaciones</label><textarea id="vigObs" maxlength="2000" placeholder="Notas adicionales (opcional)..."></textarea></div>
     </div>
     <div class="modal-footer">
@@ -1125,6 +1139,18 @@ async function abrirModalVigencia(id=null, equipoId=null){
     set('vigVence',v.fecha_vencimiento); set('vigObs',v.observaciones);
   }
   document.getElementById('modalVigencia').style.display = 'flex';
+}
+
+function vigSumar(meses){
+  // Cuenta desde la fecha de inicio (si la hay) o desde hoy
+  const ini = document.getElementById('vigInicio').value;
+  const base = ini ? new Date(ini + 'T00:00:00') : new Date();
+  const dia = base.getDate();
+  const f = new Date(base.getFullYear(), base.getMonth() + meses, 1);
+  const ultimo = new Date(f.getFullYear(), f.getMonth() + 1, 0).getDate();
+  f.setDate(Math.min(dia, ultimo));
+  const p = n => String(n).padStart(2,'0');
+  document.getElementById('vigVence').value = `${f.getFullYear()}-${p(f.getMonth()+1)}-${p(f.getDate())}`;
 }
 
 async function guardarVigencia(){
