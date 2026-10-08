@@ -285,7 +285,7 @@ function parsearContadores(string $html): array {
     $campos = ['copia_color'=>null,'copia_bn'=>null,'impresion_color'=>null,'impresion_bn'=>null,'escaneo_color'=>null,'escaneo_bn'=>null];
     foreach ($pares as $p) {
         $t = sinAcentos($p['seccion'] . ' ' . $p['etiqueta']);
-        if (preg_match('/total|fax|otros|enviar|envio|transmi/', $t)) continue;
+        if (preg_match('/total|fax|otros|cobertura|a3|dlt|duplex|banner|enviar\\/tx/', $t)) continue;
         if (preg_match('/copi|copy/', $t)) $cat = 'copia';
         elseif (preg_match('/escan|scan/', $t)) $cat = 'escaneo';
         elseif (preg_match('/impres|print/', $t)) $cat = 'impresion';
