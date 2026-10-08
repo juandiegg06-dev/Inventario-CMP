@@ -223,6 +223,24 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 .color-swatch.active{border-color:var(--tx);box-shadow:0 0 0 2px #fff inset;}
 
 
+/* ---- Impresoras ---- */
+.imp-bar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:1.1rem;}
+.imp-bar select{flex:1;min-width:200px;max-width:340px;padding:.6rem .72rem;border:1px solid var(--bd);border-radius:var(--rad);font-family:'Inter';font-size:.8rem;color:var(--tx);background:#fff;outline:none;}
+.imp-auto{display:flex;align-items:center;gap:.4rem;font-size:.74rem;color:var(--tm);margin-left:auto;cursor:pointer;}
+.imp-last{display:flex;align-items:center;gap:.5rem;font-size:.78rem;color:var(--tm);margin-bottom:.9rem;}
+.imp-last b{color:var(--tx);font-variant-numeric:tabular-nums;}
+.imp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;margin-bottom:1.4rem;}
+.imp-card{background:#fff;border:1px solid var(--bd);border-radius:var(--rad-lg);box-shadow:var(--shadow);padding:1.1rem 1.25rem;}
+.imp-card-h{display:flex;align-items:center;gap:.5rem;font-size:.74rem;font-weight:700;color:var(--tx);margin-bottom:.85rem;}
+.imp-card-h .ic{color:var(--gk);}
+.imp-row{display:flex;align-items:baseline;justify-content:space-between;padding:.4rem 0;border-top:1px solid var(--bd);font-size:.74rem;color:var(--tm);}
+.imp-row:first-of-type{border-top:none;}
+.imp-row b{font-size:1.15rem;color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+.imp-err{background:#FDEDED;color:#B42318;border-radius:var(--rad);padding:.8rem 1rem;font-size:.78rem;margin-bottom:1rem;line-height:1.5;}
+.imp-err pre{white-space:pre-wrap;word-break:break-word;font-size:.68rem;margin-top:.5rem;max-height:160px;overflow:auto;color:var(--tx);background:#fff;padding:.5rem;border-radius:8px;}
+.vgt td.num,.vgt th.num{text-align:right;white-space:nowrap;padding-left:.6rem;padding-right:.6rem;font-variant-numeric:tabular-nums;}
+@media (max-width:900px){.imp-grid{grid-template-columns:1fr;}}
+
 /* ---- Vigencias ---- */
 .form-grid > *{min-width:0;}
 .fg input,.fg select,.fg textarea{width:100%;min-width:0;box-sizing:border-box;}
@@ -302,6 +320,7 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
   </button>
   <div class="nav-seg">
     <button class="btn btn-ghost" id="btnTareas" onclick="loadKanban()"><span>Tareas</span></button>
+    <button class="btn btn-ghost" id="btnImpresoras" onclick="loadImpresoras()"><span>Impresoras</span></button>
     <button class="btn btn-ghost" id="btnVigencias" onclick="loadVigencias()"><span>Vigencias</span></button>
     <button class="btn btn-ghost" id="btnStats" onclick="loadDashboard()"><span>Estadísticas</span></button>
   </div>
@@ -522,6 +541,20 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
   </div>
 </div>
 
+<div class="modal-bg" id="modalImpresora" style="display:none" onclick="if(event.target===this)closeModal('modalImpresora')">
+  <div class="modal" style="max-width:440px">
+    <h3 id="impModalTitle"><span>Agregar impresora</span></h3>
+    <div class="modal-sub">Se consulta su página web de contadores desde la red local.</div>
+    <div class="fg"><label>Nombre *</label><input id="impNombre" maxlength="150" placeholder="Ej: Ricoh Administración"></div>
+    <div class="fg"><label>Dirección IP *</label><input id="impIp" maxlength="64" placeholder="Ej: 192.168.2.179"></div>
+    <div class="fg"><label>Ubicación</label><input id="impUbic" maxlength="150" placeholder="Ej: Piso 2 (opcional)"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalImpresora')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarImpresora()"><span>Guardar</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -556,8 +589,11 @@ const I = {
   close:    svg('<path d="M18 6 6 18M6 6l12 12"/>', 12),
   gear:     svg('<circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8 7 17M17 7l2.8-2.8"/>'),
   kanban:   svg('<rect x="3" y="3" width="6" height="18" rx="1.2"/><rect x="10" y="3" width="6" height="11" rx="1.2"/><rect x="17" y="3" width="4" height="7" rx="1.2"/>'),
+  copy:     svg('<rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'),
+  scan:     svg('<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3 12h18"/>'),
   calendar: svg('<rect x="3" y="4.5" width="18" height="16" rx="1.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>'),
   alert:    svg('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>', 14),
+  printer:  svg('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="1.5"/><path d="M6 14h12v7H6z"/>'),
   chart:    svg('<path d="M4 20V11M12 20V4M20 20v-8"/>'),
   chevLeft: svg('<path d="M15 18l-6-6 6-6"/>', 14),
   chevRight:svg('<path d="M9 18l6-6-6-6"/>', 14),
@@ -1018,6 +1054,156 @@ async function borrarSoftware(id, resp){
   }
 }
 
+/* ============ IMPRESORAS ============ */
+let impLista = [];
+let impSel = null;
+let impTimer = null;
+
+function fmtNum(n){ return (n===null||n===undefined) ? '—' : Number(n).toLocaleString('es-CO'); }
+function fmtFH(fh){
+  if(!fh) return {f:'—',h:'—'};
+  const [d,t] = String(fh).split(' ');
+  const [y,m,dd] = d.split('-');
+  return {f:`${dd}/${m}/${y}`, h:(t||'').slice(0,8)};
+}
+
+async function loadImpresoras(){
+  activeUser = null; vigViewActiva = false;
+  document.querySelectorAll('.pc.active').forEach(el=>el.classList.remove('active'));
+  document.getElementById('rightPanel').innerHTML = `
+    <div class="view-fade" id="impLive">
+    <div class="dh">
+      <div class="dh-top">
+        <div class="dh-ic">${I.printer}</div>
+        <div style="flex:1;min-width:0">
+          <div class="dhn">Impresoras</div>
+          <div class="dhs">Contadores de copia, impresión y escaneado</div>
+        </div>
+        <button class="btn btn-primary" id="btnConsultarImp" onclick="consultarImpresora()">${I.refresh}<span>Consultar ahora</span></button>
+      </div>
+    </div>
+    <div class="db">
+      <div class="imp-bar">
+        <select id="impSelect" onchange="impSel=Number(this.value);impMostrarVacio();cargarLecturasImp();"></select>
+        <button class="btn btn-ghost btn-sm" onclick="abrirModalImpresora()">${I.plus}<span>Agregar</span></button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarImpresora()" title="Eliminar impresora">${I.trash}</button>
+        <label class="imp-auto"><input type="checkbox" id="impAuto" onchange="impToggleAuto(this.checked)"> Actualizar cada minuto</label>
+      </div>
+      <div id="impMsg"></div>
+      <div id="impActual"></div>
+      <div class="panel-h" style="margin-top:.4rem">${I.calendar}<span>Historial de lecturas</span></div>
+      <div class="vg-table-wrap" id="impHistorial"></div>
+    </div>
+    </div>`;
+  const d = await api({action:'impresoras'});
+  impLista = d.impresoras || [];
+  if(!impLista.find(i=>i.id===impSel)) impSel = impLista.length ? impLista[0].id : null;
+  const sel = document.getElementById('impSelect');
+  sel.innerHTML = impLista.map(i=>`<option value="${i.id}" ${i.id===impSel?'selected':''}>${esc(i.nombre)} (${esc(i.ip)})</option>`).join('')
+                  || '<option value="">Sin impresoras</option>';
+  await cargarLecturasImp();
+}
+
+function impMostrarVacio(){
+  document.getElementById('impMsg').innerHTML = '';
+}
+
+async function cargarLecturasImp(){
+  const hist = document.getElementById('impHistorial');
+  if(!hist) return;
+  if(!impSel){ hist.innerHTML = '<div class="empty-state" style="padding:1.4rem;text-align:center">Agrega una impresora para empezar.</div>'; document.getElementById('impActual').innerHTML=''; return; }
+  const d = await api({action:'lecturas_impresora', id: impSel});
+  const rows = d.lecturas || [];
+  if(!rows.length){
+    document.getElementById('impActual').innerHTML = '<div class="empty-state" style="padding:.4rem 0 1.2rem">Aún no hay lecturas. Pulsa “Consultar ahora” para leer los contadores de la impresora.</div>';
+    hist.innerHTML = '<div class="empty-state" style="padding:1.4rem;text-align:center">Sin historial.</div>';
+    return;
+  }
+  renderImpActual(rows[0]);
+  hist.innerHTML = `<table class="vgt" style="min-width:0">
+    <thead><tr><th>Fecha</th><th>Hora</th><th class="num">Copia (Color)</th><th class="num">Copia (B/N)</th><th class="num">Impresión (Color)</th><th class="num">Impresión (B/N)</th><th class="num">Escaneado (Color)</th><th class="num">Escaneado (B/N)</th></tr></thead>
+    <tbody>${rows.map(r=>{const t=fmtFH(r.fecha_hora);return `<tr>
+      <td class="vg-date">${t.f}</td><td class="vg-date">${t.h}</td>
+      <td class="num">${fmtNum(r.copia_color)}</td><td class="num">${fmtNum(r.copia_bn)}</td>
+      <td class="num">${fmtNum(r.impresion_color)}</td><td class="num">${fmtNum(r.impresion_bn)}</td>
+      <td class="num">${fmtNum(r.escaneo_color)}</td><td class="num">${fmtNum(r.escaneo_bn)}</td></tr>`;}).join('')}</tbody></table>`;
+}
+
+function renderImpActual(l){
+  const t = fmtFH(l.fecha_hora);
+  const card = (ic, titulo, c, b) => `<div class="imp-card">
+      <div class="imp-card-h">${ic}<span>${titulo}</span></div>
+      <div class="imp-row"><span>Color</span><b>${fmtNum(c)}</b></div>
+      <div class="imp-row"><span>B/N</span><b>${fmtNum(b)}</b></div>
+    </div>`;
+  document.getElementById('impActual').innerHTML = `
+    <div class="imp-last">${I.calendar}<span>Última lectura: <b>${t.f}</b> a las <b>${t.h}</b></span></div>
+    <div class="imp-grid">
+      ${card(I.copy, 'Copia', l.copia_color, l.copia_bn)}
+      ${card(I.printer, 'Impresión', l.impresion_color, l.impresion_bn)}
+      ${card(I.scan, 'Escaneado', l.escaneo_color, l.escaneo_bn)}
+    </div>`;
+}
+
+async function consultarImpresora(silencioso=false){
+  if(!impSel) return;
+  const btn = document.getElementById('btnConsultarImp');
+  if(btn){ btn.disabled = true; btn.querySelector('span').textContent = 'Consultando...'; }
+  const msg = document.getElementById('impMsg');
+  try{
+    const r = await fetch(API + '?action=consultar_impresora', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: impSel})});
+    const res = await r.json();
+    if(!document.getElementById('impLive')) return;
+    if(res.error){
+      msg.innerHTML = `<div class="imp-err"><b>No se pudo leer la impresora.</b> ${esc(res.error)}${res.detalle ? `<pre>${esc(res.detalle)}</pre>` : ''}</div>`;
+    } else {
+      msg.innerHTML = '';
+      if(!silencioso) toast('Lectura guardada');
+      await cargarLecturasImp();
+    }
+  } catch(e){
+    if(msg) msg.innerHTML = `<div class="imp-err"><b>No se pudo consultar.</b> Revisa que XAMPP (Apache) esté activo.</div>`;
+  } finally {
+    if(btn){ btn.disabled = false; btn.querySelector('span').textContent = 'Consultar ahora'; }
+  }
+}
+
+function impToggleAuto(on){
+  if(impTimer){ clearInterval(impTimer); impTimer = null; }
+  if(!on) return;
+  consultarImpresora(true);
+  impTimer = setInterval(()=>{
+    if(!document.getElementById('impAuto')){ clearInterval(impTimer); impTimer = null; return; } // se salió de la vista
+    consultarImpresora(true);
+  }, 60000);
+}
+
+function abrirModalImpresora(){
+  ['impNombre','impIp','impUbic'].forEach(k=>document.getElementById(k).value='');
+  document.getElementById('impModalTitle').innerHTML = I.printer + '<span>Agregar impresora</span>';
+  document.getElementById('modalImpresora').style.display = 'flex';
+}
+
+async function guardarImpresora(){
+  const body = { nombre: document.getElementById('impNombre').value, ip: document.getElementById('impIp').value.trim(), ubicacion: document.getElementById('impUbic').value };
+  if(!body.nombre.trim()){ toast('El nombre es obligatorio', I.close); return; }
+  const res = await api({action:'crear_impresora'}, body);
+  if(res && res.error){ toast(res.error, I.close); return; }
+  closeModal('modalImpresora');
+  impSel = res.id;
+  toast('Impresora agregada');
+  loadImpresoras();
+}
+
+async function eliminarImpresora(){
+  if(!impSel) return;
+  if(!confirm('¿Eliminar esta impresora y todo su historial de lecturas?')) return;
+  await api({action:'eliminar_impresora'}, {id: impSel});
+  impSel = null;
+  toast('Impresora eliminada', I.trash);
+  loadImpresoras();
+}
+
 /* ============ VIGENCIAS ============ */
 let vigData = [];
 let vigFiltro = 'todas';
@@ -1463,6 +1649,7 @@ async function borrarTarea(id){
 
 /* ============ INIT ============ */
 document.getElementById('btnTareas').innerHTML = I.kanban + '<span>Tareas</span>';
+document.getElementById('btnImpresoras').innerHTML = I.printer + '<span>Impresoras</span>';
 document.getElementById('btnVigencias').innerHTML = I.calendar + '<span>Vigencias</span>';
 document.getElementById('btnStats').innerHTML = I.chart + '<span>Estadísticas</span>';
 document.getElementById('searchIcon').innerHTML = I.search;

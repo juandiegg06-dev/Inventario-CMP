@@ -170,6 +170,165 @@ const VIGENCIA_SELECT = "SELECT v.id, v.equipo_id, v.tipo, v.nombre, v.proveedor
     FROM vigencias v
     LEFT JOIN equipos e ON e.id = v.equipo_id AND e.deleted_at IS NULL";
 
+// ---------------------------------------------------------------------------
+// Impresoras (lectura de contadores desde la web de la impresora, p. ej. Ricoh)
+// ---------------------------------------------------------------------------
+const IMPRESORA_IP_DEFECTO = '192.168.2.179';
+
+function asegurarTablasImpresoras(PDO $pdo): void {
+    static $listo = false;
+    if ($listo) return;
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `impresoras` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombre` varchar(150) NOT NULL,
+  `ip` varchar(64) NOT NULL,
+  `ubicacion` varchar(150) DEFAULT NULL,
+  `creado_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `impresora_lecturas` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `impresora_id` int(11) NOT NULL,
+  `fecha_hora` datetime NOT NULL DEFAULT current_timestamp(),
+  `copia_color` int(11) DEFAULT NULL,
+  `copia_bn` int(11) DEFAULT NULL,
+  `impresion_color` int(11) DEFAULT NULL,
+  `impresion_bn` int(11) DEFAULT NULL,
+  `escaneo_color` int(11) DEFAULT NULL,
+  `escaneo_bn` int(11) DEFAULT NULL,
+  `crudo` mediumtext DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_lec_impresora` (`impresora_id`,`fecha_hora`),
+  CONSTRAINT `fk_lec_impresora` FOREIGN KEY (`impresora_id`) REFERENCES `impresoras` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+    // Primera vez: deja registrada la impresora de prueba
+    if ((int)$pdo->query("SELECT COUNT(*) FROM impresoras")->fetchColumn() === 0) {
+        $pdo->prepare("INSERT INTO impresoras (nombre, ip) VALUES (?, ?)")
+            ->execute(['Impresora ' . IMPRESORA_IP_DEFECTO, IMPRESORA_IP_DEFECTO]);
+    }
+    $listo = true;
+}
+
+/** Solo se permiten IPv4 de red local (evita que la API se use para consultar sitios externos). */
+function ipLocalValida(string $ip): bool {
+    if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) return false;
+    return !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE);
+}
+
+function descargarPagina(string $url, string &$cookies, ?string &$err = null): ?string {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false, // las impresoras usan certificado propio
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_COOKIE => $cookies,
+        CURLOPT_HEADER => true,
+        CURLOPT_USERAGENT => 'Mozilla/5.0 InvCMP',
+        CURLOPT_HTTPHEADER => ['Accept-Language: es'],
+    ]);
+    $resp = curl_exec($ch);
+    if ($resp === false) { $err = curl_error($ch); curl_close($ch); return null; }
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $hs = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+    $headers = substr($resp, 0, $hs);
+    if (preg_match_all('/^Set-Cookie:\s*([^=;\s]+=[^;\r\n]*)/mi', $headers, $m)) {
+        foreach ($m[1] as $c) $cookies .= ($cookies === '' ? '' : '; ') . $c;
+    }
+    if ($code >= 400) { $err = "HTTP $code"; return null; }
+    return substr($resp, $hs);
+}
+
+function sinAcentos(string $s): string {
+    return strtr(mb_strtolower($s), ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
+}
+
+/**
+ * Lee la pagina de contadores y devuelve todos los pares etiqueta/valor encontrados
+ * y los 6 campos que usa el inventario (copia/impresion/escaneo x color/B-N).
+ */
+function parsearContadores(string $html): array {
+    $dom = new DOMDocument();
+    $prev = libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
+
+    $pares = [];
+    $seccion = '';
+    foreach ($dom->getElementsByTagName('tr') as $tr) {
+        $celdas = [];
+        foreach ($tr->childNodes as $n) {
+            if ($n instanceof DOMElement && in_array(strtolower($n->tagName), ['td','th'])) {
+                $t = trim(preg_replace('/\s+/u', ' ', str_replace("\xC2\xA0", ' ', $n->textContent)));
+                if ($t !== '') $celdas[] = $t;
+            }
+        }
+        if (!$celdas) continue;
+        $ultimo = end($celdas);
+        $num = preg_replace('/[^\d]/', '', $ultimo);
+        if (count($celdas) >= 2 && $num !== '' && preg_match('/^[\d.,\s]+$/', $ultimo)) {
+            $pares[] = ['seccion' => $seccion, 'etiqueta' => implode(' ', array_slice($celdas, 0, -1)), 'valor' => (int)$num];
+        } elseif (count($celdas) === 1 && !preg_match('/^[\d.,\s]+$/', $celdas[0])) {
+            $seccion = $celdas[0];
+        }
+    }
+
+    $campos = ['copia_color'=>null,'copia_bn'=>null,'impresion_color'=>null,'impresion_bn'=>null,'escaneo_color'=>null,'escaneo_bn'=>null];
+    foreach ($pares as $p) {
+        $t = sinAcentos($p['seccion'] . ' ' . $p['etiqueta']);
+        if (preg_match('/total|fax|otros|enviar|envio|transmi/', $t)) continue;
+        if (preg_match('/copi|copy/', $t)) $cat = 'copia';
+        elseif (preg_match('/escan|scan/', $t)) $cat = 'escaneo';
+        elseif (preg_match('/impres|print/', $t)) $cat = 'impresion';
+        else continue;
+        $esBn = (bool)preg_match('/negro|b\/n|\bbn\b|blanco|mono|black|b&w/', $t);
+        $esColor = (bool)preg_match('/color/', $t);
+        if ($esBn && !$esColor) $tipo = 'bn';
+        elseif ($esColor && !$esBn) $tipo = 'color';
+        else continue;
+        $k = $cat . '_' . $tipo;
+        if ($campos[$k] === null) $campos[$k] = $p['valor'];
+    }
+    return ['campos' => $campos, 'pares' => $pares];
+}
+
+/** Consulta la impresora y devuelve [lectura|null, error|null, textoCrudo]. */
+function consultarImpresora(string $ip): array {
+    if (!ipLocalValida($ip)) return [null, 'La IP debe ser una dirección de red local.', ''];
+    $rutas = [
+        '/web/guest/es/websys/status/getUnificationCounter.cgi',
+        '/web/guest/en/websys/status/getUnificationCounter.cgi',
+        '/web/entry/es/websys/status/getUnificationCounter.cgi',
+    ];
+    $ultimoErr = null; $ultimoTxt = '';
+    foreach (['https', 'http'] as $esq) {
+        $cookies = '';
+        $err = null;
+        // Visita inicial para obtener la cookie de sesion de la impresora
+        descargarPagina("$esq://$ip/", $cookies, $err);
+        if ($err !== null && stripos($err, 'HTTP') === false) { $ultimoErr = $err; continue; }
+        foreach ($rutas as $ruta) {
+            $err = null;
+            $html = descargarPagina("$esq://$ip$ruta", $cookies, $err);
+            if ($html === null) { $ultimoErr = $err; continue; }
+            $r = parsearContadores($html);
+            $ultimoTxt = mb_substr(trim(preg_replace('/\s+/u', ' ', strip_tags($html))), 0, 1500);
+            if (count(array_filter($r['campos'], fn($v) => $v !== null)) > 0) return [$r, null, $ultimoTxt];
+            $ultimoErr = 'La impresora respondió, pero no se reconocieron los contadores.';
+        }
+    }
+    return [null, $ultimoErr ?: 'No se pudo conectar con la impresora.', $ultimoTxt];
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
@@ -617,6 +776,74 @@ switch ($action) {
         asegurarTablaVigencias($pdo);
         $pdo->prepare("DELETE FROM vigencias WHERE id = ? AND deleted_at IS NOT NULL")->execute([(int)($body['id'] ?? 0)]);
         echo json_encode(['ok' => true]);
+        break;
+
+    // ----- Impresoras -----
+    case 'impresoras':
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $rows = $pdo->query("SELECT i.id, i.nombre, i.ip, i.ubicacion,
+            (SELECT MAX(l.fecha_hora) FROM impresora_lecturas l WHERE l.impresora_id = i.id) AS ultima_lectura
+            FROM impresoras i ORDER BY i.nombre")->fetchAll();
+        echo json_encode(['impresoras' => $rows]);
+        break;
+
+    case 'crear_impresora':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $nombre = textoOpcional($body['nombre'] ?? '', 150);
+        $ip = trim((string)($body['ip'] ?? ''));
+        if ($nombre === null) { responderError(400, 'El nombre es obligatorio.'); break; }
+        if (!ipLocalValida($ip)) { responderError(400, 'Escribe una IP de red local válida (ej. 192.168.2.179).'); break; }
+        $pdo->prepare("INSERT INTO impresoras (nombre, ip, ubicacion) VALUES (?,?,?)")
+            ->execute([$nombre, $ip, textoOpcional($body['ubicacion'] ?? '', 150)]);
+        echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
+        break;
+
+    case 'eliminar_impresora':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $pdo->prepare("DELETE FROM impresoras WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
+        echo json_encode(['ok' => true]);
+        break;
+
+    // Consulta la impresora en este momento y guarda la lectura
+    case 'consultar_impresora':
+        if ($method !== 'POST') { http_response_code(405); break; }
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $st = $pdo->prepare("SELECT id, ip FROM impresoras WHERE id = ?");
+        $st->execute([(int)($body['id'] ?? 0)]);
+        $imp = $st->fetch();
+        if (!$imp) { responderError(404, 'Impresora no encontrada.'); break; }
+        [$r, $err, $txt] = consultarImpresora($imp['ip']);
+        if ($r === null) {
+            http_response_code(502);
+            echo json_encode(['error' => $err, 'detalle' => $txt]);
+            break;
+        }
+        $c = $r['campos'];
+        $pdo->prepare("INSERT INTO impresora_lecturas (impresora_id, copia_color, copia_bn, impresion_color, impresion_bn, escaneo_color, escaneo_bn, crudo)
+                       VALUES (?,?,?,?,?,?,?,?)")
+            ->execute([$imp['id'], $c['copia_color'], $c['copia_bn'], $c['impresion_color'], $c['impresion_bn'], $c['escaneo_color'], $c['escaneo_bn'],
+                       json_encode($r['pares'], JSON_UNESCAPED_UNICODE)]);
+        $lec = $pdo->prepare("SELECT * FROM impresora_lecturas WHERE id = ?");
+        $lec->execute([(int)$pdo->lastInsertId()]);
+        $fila = $lec->fetch();
+        $fila['pares'] = $r['pares'];
+        unset($fila['crudo']);
+        echo json_encode(['ok' => true, 'lectura' => $fila]);
+        break;
+
+    case 'lecturas_impresora':
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        $st = $pdo->prepare("SELECT id, fecha_hora, copia_color, copia_bn, impresion_color, impresion_bn, escaneo_color, escaneo_bn
+            FROM impresora_lecturas WHERE impresora_id = ? ORDER BY fecha_hora DESC, id DESC LIMIT 100");
+        $st->execute([(int)($_GET['id'] ?? 0)]);
+        echo json_encode(['lecturas' => $st->fetchAll()]);
         break;
 
     case 'stats':

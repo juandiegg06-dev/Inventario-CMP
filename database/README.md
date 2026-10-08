@@ -22,3 +22,7 @@ Listo, el proyecto debería funcionar apuntando a `http://localhost/Inventario-C
 Guarda licencias, garantías y suscripciones (de hardware o software) con su fecha de vencimiento, opcionalmente ligadas a un equipo.
 Se crea automáticamente la primera vez que se abre la página; `vigencias.sql` sirve para crearla a mano y ya viene incluida en `inventario_cmp.sql`.
 Estados: vigente, por vencer (30 días o menos) y vencida. Al eliminar una vigencia va a la papelera.
+
+## Impresoras
+
+Tablas `impresoras` y `impresora_lecturas` (se crean solas; `impresoras.sql` para crearlas a mano). La página consulta el contador de la impresora desde el servidor local (PHP) y guarda cada lectura con fecha y hora: copia, impresión y escaneado, en color y B/N. Solo acepta IPs de red local.
