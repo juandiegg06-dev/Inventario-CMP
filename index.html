@@ -238,6 +238,7 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 .imp-row b{font-size:1.15rem;color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 .imp-err{background:#FDEDED;color:#B42318;border-radius:var(--rad);padding:.8rem 1rem;font-size:.78rem;margin-bottom:1rem;line-height:1.5;}
 .imp-err pre{white-space:pre-wrap;word-break:break-word;font-size:.68rem;margin-top:.5rem;max-height:160px;overflow:auto;color:var(--tx);background:#fff;padding:.5rem;border-radius:8px;}
+.imp-hist th{font-size:.6rem;padding:.55rem .55rem;}.imp-hist td{padding:.6rem .55rem;font-size:.74rem;}.imp-hist th.num.g{text-align:center;border-bottom:1px solid var(--bd);}.imp-hist .imp-grp th{border-bottom:none;}
 .vgt td.num,.vgt th.num{text-align:right;white-space:nowrap;padding-left:.6rem;padding-right:.6rem;font-variant-numeric:tabular-nums;}
 @media (max-width:900px){.imp-grid{grid-template-columns:1fr;}}
 
@@ -1122,13 +1123,15 @@ async function cargarLecturasImp(){
     return;
   }
   renderImpActual(rows[0]);
-  hist.innerHTML = `<table class="vgt" style="min-width:0">
-    <thead><tr><th>Fecha</th><th>Hora</th><th class="num">Copia (Color)</th><th class="num">Copia (B/N)</th><th class="num">Impresión (Color)</th><th class="num">Impresión (B/N)</th><th class="num">Escaneado (Color)</th><th class="num">Escaneado (B/N)</th><th></th></tr></thead>
+  const cols = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores','impresion_color','impresion_bn','impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn'];
+  hist.innerHTML = `<table class="vgt imp-hist" style="min-width:0">
+    <thead>
+      <tr class="imp-grp"><th rowspan="2">Fecha</th><th rowspan="2">Hora</th><th colspan="4" class="num g">Copia</th><th colspan="4" class="num g">Impresión</th><th colspan="2" class="num g">Escaneado</th><th rowspan="2"></th></tr>
+      <tr><th class="num">Todo color</th><th class="num">B/N</th><th class="num">Personal.</th><th class="num">Dos col.</th><th class="num">Todo color</th><th class="num">B/N</th><th class="num">Personal.</th><th class="num">Dos col.</th><th class="num">Color</th><th class="num">B/N</th></tr>
+    </thead>
     <tbody>${rows.map(r=>{const t=fmtFH(r.fecha_hora);return `<tr>
       <td class="vg-date">${t.f}</td><td class="vg-date">${t.h}</td>
-      <td class="num">${fmtNum(r.copia_color)}</td><td class="num">${fmtNum(r.copia_bn)}</td>
-      <td class="num">${fmtNum(r.impresion_color)}</td><td class="num">${fmtNum(r.impresion_bn)}</td>
-      <td class="num">${fmtNum(r.escaneo_color)}</td><td class="num">${fmtNum(r.escaneo_bn)}</td>
+      ${cols.map(k=>`<td class="num">${fmtNum(r[k])}</td>`).join('')}
       <td><button class="btn btn-danger btn-sm" onclick="borrarLecturaImp(${r.id})" title="Borrar esta lectura">${I.trash}</button></td></tr>`;}).join('')}</tbody></table>`;
   const bb = document.getElementById('btnBorrarHist'); if(bb) bb.style.display = 'inline-flex';
 }
@@ -1149,17 +1152,16 @@ async function borrarHistorialImp(){
 
 function renderImpActual(l){
   const t = fmtFH(l.fecha_hora);
-  const card = (ic, titulo, c, b) => `<div class="imp-card">
+  const card = (ic, titulo, filas) => `<div class="imp-card">
       <div class="imp-card-h">${ic}<span>${titulo}</span></div>
-      <div class="imp-row"><span>Color</span><b>${fmtNum(c)}</b></div>
-      <div class="imp-row"><span>B/N</span><b>${fmtNum(b)}</b></div>
+      ${filas.map(([n,v])=>`<div class="imp-row"><span>${n}</span><b>${fmtNum(v)}</b></div>`).join('')}
     </div>`;
   document.getElementById('impActual').innerHTML = `
     <div class="imp-last">${I.calendar}<span>Última lectura: <b>${t.f}</b> a las <b>${t.h}</b></span></div>
     <div class="imp-grid">
-      ${card(I.copy, 'Copia', l.copia_color, l.copia_bn)}
-      ${card(I.printer, 'Impresión', l.impresion_color, l.impresion_bn)}
-      ${card(I.scan, 'Escaneado', l.escaneo_color, l.escaneo_bn)}
+      ${card(I.copy, 'Copiadora', [['A todo color',l.copia_color],['Blanco y Negro',l.copia_bn],['Color personalizado',l.copia_color_pers],['Dos colores',l.copia_dos_colores]])}
+      ${card(I.printer, 'Impresora', [['A todo color',l.impresion_color],['Blanco y Negro',l.impresion_bn],['Color personalizado',l.impresion_color_pers],['Dos colores',l.impresion_dos_colores]])}
+      ${card(I.scan, 'Envío por escáner', [['Color',l.escaneo_color],['Blanco y Negro',l.escaneo_bn]])}
     </div>`;
 }
 

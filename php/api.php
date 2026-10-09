@@ -193,8 +193,12 @@ CREATE TABLE IF NOT EXISTS `impresora_lecturas` (
   `fecha_hora` datetime NOT NULL DEFAULT current_timestamp(),
   `copia_color` int(11) DEFAULT NULL,
   `copia_bn` int(11) DEFAULT NULL,
+  `copia_color_pers` int(11) DEFAULT NULL,
+  `copia_dos_colores` int(11) DEFAULT NULL,
   `impresion_color` int(11) DEFAULT NULL,
   `impresion_bn` int(11) DEFAULT NULL,
+  `impresion_color_pers` int(11) DEFAULT NULL,
+  `impresion_dos_colores` int(11) DEFAULT NULL,
   `escaneo_color` int(11) DEFAULT NULL,
   `escaneo_bn` int(11) DEFAULT NULL,
   `crudo` mediumtext DEFAULT NULL,
@@ -203,6 +207,12 @@ CREATE TABLE IF NOT EXISTS `impresora_lecturas` (
   CONSTRAINT `fk_lec_impresora` FOREIGN KEY (`impresora_id`) REFERENCES `impresoras` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
+    // Tablas creadas antes de agregar color personalizado y dos colores
+    foreach (['copia_color_pers','copia_dos_colores','impresion_color_pers','impresion_dos_colores'] as $col) {
+        if (!$pdo->query("SHOW COLUMNS FROM impresora_lecturas LIKE '$col'")->fetch()) {
+            $pdo->exec("ALTER TABLE impresora_lecturas ADD COLUMN `$col` int(11) DEFAULT NULL");
+        }
+    }
     // Alta inicial (una sola vez): impresoras de la empresa con su nombre
     $pdo->exec("CREATE TABLE IF NOT EXISTS app_migraciones (clave varchar(80) NOT NULL, aplicada_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (clave)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $hecha = $pdo->prepare("SELECT 1 FROM app_migraciones WHERE clave = ?");
@@ -263,8 +273,8 @@ function sinAcentos(string $s): string {
 }
 
 /**
- * Lee la pagina de contadores y devuelve todos los pares etiqueta/valor encontrados
- * y los 6 campos que usa el inventario (copia/impresion/escaneo x color/B-N).
+ * Lee la pagina de contadores (Ricoh) y devuelve todos los pares etiqueta/valor encontrados
+ * y los campos que usa el inventario. Toma siempre la primera cifra de cada fila (columna "Total").
  */
 function parsearContadores(string $html): array {
     $dom = new DOMDocument();
@@ -284,28 +294,48 @@ function parsearContadores(string $html): array {
             }
         }
         if (!$celdas) continue;
-        $ultimo = end($celdas);
-        $num = preg_replace('/[^\d]/', '', $ultimo);
-        if (count($celdas) >= 2 && $num !== '' && preg_match('/^[\d.,\s]+$/', $ultimo)) {
-            $pares[] = ['seccion' => $seccion, 'etiqueta' => implode(' ', array_slice($celdas, 0, -1)), 'valor' => (int)$num];
-        } elseif (count($celdas) === 1 && !preg_match('/^[\d.,\s]+$/', $celdas[0])) {
-            $seccion = $celdas[0];
+
+        $etiqueta = null; $valor = null;
+        if (preg_match('/^([^:\d][^:]*?)\s*:\s*(\d[\d.,]*)\b/u', $celdas[0], $m)) {
+            // "A todo color : 107745" en una sola celda
+            $etiqueta = $m[1]; $valor = $m[2];
+        } else {
+            for ($i = 1; $i < count($celdas); $i++) {
+                if (preg_match('/^:?\s*(\d[\d.,]*)\s*$/', $celdas[$i], $m)) {
+                    $etiqueta = trim(str_replace(':', ' ', implode(' ', array_slice($celdas, 0, $i))));
+                    $valor = $m[1];
+                    break;
+                }
+            }
+        }
+        if ($etiqueta !== null && $etiqueta !== '') {
+            $pares[] = ['seccion' => $seccion, 'etiqueta' => $etiqueta, 'valor' => (int)preg_replace('/\D/', '', $valor)];
+        } elseif (count($celdas) === 1 && mb_strlen($celdas[0]) <= 40 && !preg_match('/\d/', $celdas[0])) {
+            $seccion = $celdas[0]; // encabezado de seccion (las descripciones largas se ignoran)
         }
     }
 
-    $campos = ['copia_color'=>null,'copia_bn'=>null,'impresion_color'=>null,'impresion_bn'=>null,'escaneo_color'=>null,'escaneo_bn'=>null];
+    $campos = [
+        'copia_color'=>null,'copia_bn'=>null,'copia_color_pers'=>null,'copia_dos_colores'=>null,
+        'impresion_color'=>null,'impresion_bn'=>null,'impresion_color_pers'=>null,'impresion_dos_colores'=>null,
+        'escaneo_color'=>null,'escaneo_bn'=>null,
+    ];
     foreach ($pares as $p) {
-        $t = sinAcentos($p['seccion'] . ' ' . $p['etiqueta']);
-        if (preg_match('/total|fax|otros|cobertura|a3|dlt|duplex|banner|enviar\\/tx/', $t)) continue;
-        if (preg_match('/copi|copy/', $t)) $cat = 'copia';
-        elseif (preg_match('/escan|scan/', $t)) $cat = 'escaneo';
-        elseif (preg_match('/impres|print/', $t)) $cat = 'impresion';
+        $sec = sinAcentos($p['seccion']);
+        $et  = sinAcentos($p['etiqueta']);
+        if (preg_match('/total|fax|otros|cobertura|a3|dlt|duplex|banner|enviar\/tx/', $sec . ' ' . $et)) continue;
+        if (preg_match('/copi|copy/', $sec)) $cat = 'copia';
+        elseif (preg_match('/escan|scan/', $sec)) $cat = 'escaneo';
+        elseif (preg_match('/impres|print/', $sec)) $cat = 'impresion';
         else continue;
-        $esBn = (bool)preg_match('/negro|b\/n|\bbn\b|blanco|mono|black|b&w/', $t);
-        $esColor = (bool)preg_match('/color/', $t);
-        if ($esBn && !$esColor) $tipo = 'bn';
-        elseif ($esColor && !$esBn) $tipo = 'color';
+
+        if (preg_match('/personaliz|custom/', $et)) $tipo = 'color_pers';
+        elseif (preg_match('/dos colores|two.?color/', $et)) $tipo = 'dos_colores';
+        elseif (preg_match('/negro|b\/n|\bbn\b|blanco|mono|black|b&w/', $et) && !preg_match('/color/', $et)) $tipo = 'bn';
+        elseif (preg_match('/color/', $et) && !preg_match('/un color|single/', $et)) $tipo = 'color';
         else continue;
+
+        if ($cat === 'escaneo' && ($tipo === 'color_pers' || $tipo === 'dos_colores')) continue;
         $k = $cat . '_' . $tipo;
         if ($campos[$k] === null) $campos[$k] = $p['valor'];
     }
@@ -836,10 +866,13 @@ switch ($action) {
             break;
         }
         $c = $r['campos'];
-        $pdo->prepare("INSERT INTO impresora_lecturas (impresora_id, copia_color, copia_bn, impresion_color, impresion_bn, escaneo_color, escaneo_bn, crudo)
-                       VALUES (?,?,?,?,?,?,?,?)")
-            ->execute([$imp['id'], $c['copia_color'], $c['copia_bn'], $c['impresion_color'], $c['impresion_bn'], $c['escaneo_color'], $c['escaneo_bn'],
-                       json_encode($r['pares'], JSON_UNESCAPED_UNICODE)]);
+        $cols = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores','impresion_color','impresion_bn',
+                 'impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn'];
+        $vals = [$imp['id']];
+        foreach ($cols as $k) $vals[] = $c[$k];
+        $vals[] = json_encode($r['pares'], JSON_UNESCAPED_UNICODE);
+        $pdo->prepare("INSERT INTO impresora_lecturas (impresora_id, " . implode(', ', $cols) . ", crudo) VALUES (" . implode(',', array_fill(0, count($cols) + 2, '?')) . ")")
+            ->execute($vals);
         $lec = $pdo->prepare("SELECT * FROM impresora_lecturas WHERE id = ?");
         $lec->execute([(int)$pdo->lastInsertId()]);
         $fila = $lec->fetch();
@@ -867,7 +900,8 @@ switch ($action) {
     case 'lecturas_impresora':
         $pdo = getDB();
         asegurarTablasImpresoras($pdo);
-        $st = $pdo->prepare("SELECT id, fecha_hora, copia_color, copia_bn, impresion_color, impresion_bn, escaneo_color, escaneo_bn
+        $st = $pdo->prepare("SELECT id, fecha_hora, copia_color, copia_bn, copia_color_pers, copia_dos_colores, impresion_color, impresion_bn,
+            impresion_color_pers, impresion_dos_colores, escaneo_color, escaneo_bn
             FROM impresora_lecturas WHERE impresora_id = ? ORDER BY fecha_hora DESC, id DESC LIMIT 100");
         $st->execute([(int)($_GET['id'] ?? 0)]);
         echo json_encode(['lecturas' => $st->fetchAll()]);
