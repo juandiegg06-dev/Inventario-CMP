@@ -173,8 +173,6 @@ const VIGENCIA_SELECT = "SELECT v.id, v.equipo_id, v.tipo, v.nombre, v.proveedor
 // ---------------------------------------------------------------------------
 // Impresoras (lectura de contadores desde la web de la impresora, p. ej. Ricoh)
 // ---------------------------------------------------------------------------
-const IMPRESORA_IP_DEFECTO = '192.168.2.179';
-
 function asegurarTablasImpresoras(PDO $pdo): void {
     static $listo = false;
     if ($listo) return;
@@ -205,10 +203,23 @@ CREATE TABLE IF NOT EXISTS `impresora_lecturas` (
   CONSTRAINT `fk_lec_impresora` FOREIGN KEY (`impresora_id`) REFERENCES `impresoras` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
-    // Primera vez: deja registrada la impresora de prueba
-    if ((int)$pdo->query("SELECT COUNT(*) FROM impresoras")->fetchColumn() === 0) {
-        $pdo->prepare("INSERT INTO impresoras (nombre, ip) VALUES (?, ?)")
-            ->execute(['Impresora ' . IMPRESORA_IP_DEFECTO, IMPRESORA_IP_DEFECTO]);
+    // Alta inicial (una sola vez): impresoras de la empresa con su nombre
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_migraciones (clave varchar(80) NOT NULL, aplicada_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (clave)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $hecha = $pdo->prepare("SELECT 1 FROM app_migraciones WHERE clave = ?");
+    $hecha->execute(['impresoras_nombres_v1']);
+    if (!$hecha->fetchColumn()) {
+        $iniciales = [
+            ['192.168.2.179', 'RICOH MP C6004ex (TESORERIA)'],
+            ['192.168.2.35',  'RICOH IM C3500 (RECEPCION)'],
+        ];
+        foreach ($iniciales as [$ip, $nombre]) {
+            $ex = $pdo->prepare("SELECT id FROM impresoras WHERE ip = ? ORDER BY id LIMIT 1");
+            $ex->execute([$ip]);
+            $id = $ex->fetchColumn();
+            if ($id) $pdo->prepare("UPDATE impresoras SET nombre = ? WHERE id = ?")->execute([$nombre, $id]);
+            else $pdo->prepare("INSERT INTO impresoras (nombre, ip) VALUES (?, ?)")->execute([$nombre, $ip]);
+        }
+        $pdo->prepare("INSERT INTO app_migraciones (clave) VALUES (?)")->execute(['impresoras_nombres_v1']);
     }
     $listo = true;
 }
