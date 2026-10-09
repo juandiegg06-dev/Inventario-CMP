@@ -229,7 +229,7 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 .imp-auto{display:flex;align-items:center;gap:.4rem;font-size:.74rem;color:var(--tm);margin-left:auto;cursor:pointer;}
 .imp-last{display:flex;align-items:center;gap:.5rem;font-size:.78rem;color:var(--tm);margin-bottom:.9rem;}
 .imp-last b{color:var(--tx);font-variant-numeric:tabular-nums;}
-.imp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;margin-bottom:1.4rem;}
+.imp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.9rem;margin-bottom:1.4rem;}
 .imp-card{background:#fff;border:1px solid var(--bd);border-radius:var(--rad-lg);box-shadow:var(--shadow);padding:1.1rem 1.25rem;}
 .imp-card-h{display:flex;align-items:center;gap:.5rem;font-size:.74rem;font-weight:700;color:var(--tx);margin-bottom:.85rem;}
 .imp-card-h .ic{color:var(--gk);}
@@ -238,9 +238,10 @@ legend{font-size:.64rem;font-weight:700;color:var(--gk);text-transform:uppercase
 .imp-row b{font-size:1.15rem;color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
 .imp-err{background:#FDEDED;color:#B42318;border-radius:var(--rad);padding:.8rem 1rem;font-size:.78rem;margin-bottom:1rem;line-height:1.5;}
 .imp-err pre{white-space:pre-wrap;word-break:break-word;font-size:.68rem;margin-top:.5rem;max-height:160px;overflow:auto;color:var(--tx);background:#fff;padding:.5rem;border-radius:8px;}
+.imp-total-row td{background:var(--mu);border-top:2px solid var(--bd);}
 .imp-hist th{font-size:.6rem;padding:.55rem .55rem;}.imp-hist td{padding:.6rem .55rem;font-size:.74rem;}.imp-hist th.num.g{text-align:center;border-bottom:1px solid var(--bd);}.imp-hist .imp-grp th{border-bottom:none;}
 .vgt td.num,.vgt th.num{text-align:right;white-space:nowrap;padding-left:.6rem;padding-right:.6rem;font-variant-numeric:tabular-nums;}
-@media (max-width:900px){.imp-grid{grid-template-columns:1fr;}}
+
 
 /* ---- Vigencias ---- */
 .form-grid > *{min-width:0;}
@@ -642,6 +643,14 @@ function closeModal(id){ document.getElementById(id).style.display='none'; }
 function esc(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ============ DASHBOARD ============ */
+function impKpiHTML(t){
+  if(!t || !(t.impresoras||[]).length) return '';
+  return `<div class="kpi-card" onclick="loadImpresoras()">
+    <div class="kpi-ic">${I.printer}</div>
+    <div class="kpi-info"><div class="kpi-n">${fmtNum(t.suma.contador_total)}</div><div class="kpi-l">Páginas (todas las impresoras)</div></div>
+  </div>`;
+}
+
 function vigKpiHTML(v){
   if(!v) return '';
   const aviso = v.vencidas > 0
@@ -684,6 +693,7 @@ async function loadDashboard(){
     <div class="db">
       <div class="kpi-grid">
         ${vigKpiHTML(d.vigencias)}
+        ${impKpiHTML(d.impresoras)}
         ${cards.map(c=>`
           <div class="kpi-card" onclick="openKpiModal('${c.tipo}'${c.componente?`,'${esc(c.componente).replace(/'/g,"\\'")}'`:''})">
             <div class="kpi-ic">${c.ic}</div>
@@ -711,6 +721,11 @@ async function loadDashboard(){
             </div>`).join('') : '<div class="empty-state">Sin datos.</div>'}
         </div>
       </div>
+      ${d.impresoras && (d.impresoras.impresoras||[]).length ? `
+      <div class="panel" style="margin-top:.2rem">
+        <div class="panel-h">${I.printer}<span>Impresoras · contador total</span></div>
+        <div class="vg-table-wrap" style="box-shadow:none">${impTotalesHTML(d.impresoras)}</div>
+      </div>` : ''}
     </div>
     </div>
   `;
@@ -1060,6 +1075,44 @@ let impLista = [];
 let impSel = null;
 let impTimer = null;
 
+function sumaCampos(r, ks){
+  return ks.reduce((a,k)=>a + (r[k]==null ? 0 : Number(r[k])), 0);
+}
+const K_COPIA = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores'];
+const K_IMPR  = ['impresion_color','impresion_bn','impresion_color_pers','impresion_dos_colores'];
+const K_ESC   = ['escaneo_color','escaneo_bn'];
+
+/* Tabla de totales: cada impresora por separado + total general (suma de todas) */
+function impTotalesHTML(t){
+  const lista = (t && t.impresoras) || [];
+  if(!lista.length) return '<div class="empty-state" style="padding:1.2rem;text-align:center">Aún no hay impresoras.</div>';
+  const fila = r => {
+    const ok = r.fecha_hora != null;
+    const f = ok ? fmtFH(r.fecha_hora) : null;
+    return `<tr>
+      <td><div class="vg-name">${esc(r.nombre)}</div><div class="vg-sub">${ok ? 'Lectura: '+f.f+' '+f.h.slice(0,5) : 'Sin lecturas'}</div></td>
+      <td class="num">${ok ? fmtNum(sumaCampos(r,K_COPIA)) : '—'}</td>
+      <td class="num">${ok ? fmtNum(sumaCampos(r,K_IMPR)) : '—'}</td>
+      <td class="num">${ok ? fmtNum(sumaCampos(r,K_ESC)) : '—'}</td>
+      <td class="num"><b>${ok ? fmtNum(r.contador_total) : '—'}</b></td></tr>`;
+  };
+  const sm = t.suma || {};
+  return `<table class="vgt" style="min-width:0">
+    <thead><tr><th>Impresora</th><th class="num">Copia</th><th class="num">Impresión</th><th class="num">Escaneado</th><th class="num">Contador total</th></tr></thead>
+    <tbody>${lista.map(fila).join('')}
+    <tr class="imp-total-row"><td><div class="vg-name">Total de todas las impresoras</div></td>
+      <td class="num">${fmtNum(sumaCampos(sm,K_COPIA))}</td><td class="num">${fmtNum(sumaCampos(sm,K_IMPR))}</td>
+      <td class="num">${fmtNum(sumaCampos(sm,K_ESC))}</td><td class="num"><b>${fmtNum(sm.contador_total)}</b></td></tr>
+    </tbody></table>`;
+}
+
+async function cargarTotalesImp(){
+  const box = document.getElementById('impTotales');
+  if(!box) return;
+  const t = await api({action:'impresoras_totales'});
+  box.innerHTML = impTotalesHTML(t);
+}
+
 function fmtNum(n){ return (n===null||n===undefined) ? '—' : Number(n).toLocaleString('es-CO'); }
 function fmtFH(fh){
   if(!fh) return {f:'—',h:'—'};
@@ -1084,6 +1137,8 @@ async function loadImpresoras(){
       </div>
     </div>
     <div class="db">
+      <div class="panel-h">${I.printer}<span>Totales de todas las impresoras</span></div>
+      <div class="vg-table-wrap" id="impTotales" style="margin-bottom:1.4rem"></div>
       <div class="imp-bar">
         <select id="impSelect" onchange="impSel=Number(this.value);impMostrarVacio();cargarLecturasImp();"></select>
         <button class="btn btn-ghost btn-sm" onclick="abrirModalImpresora()">${I.plus}<span>Agregar</span></button>
@@ -1103,6 +1158,7 @@ async function loadImpresoras(){
   const sel = document.getElementById('impSelect');
   sel.innerHTML = impLista.map(i=>`<option value="${i.id}" ${i.id===impSel?'selected':''}>${esc(i.nombre)} (${esc(i.ip)})</option>`).join('')
                   || '<option value="">Sin impresoras</option>';
+  cargarTotalesImp();
   await cargarLecturasImp();
 }
 
@@ -1126,12 +1182,12 @@ async function cargarLecturasImp(){
   const cols = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores','impresion_color','impresion_bn','impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn'];
   hist.innerHTML = `<table class="vgt imp-hist" style="min-width:0">
     <thead>
-      <tr class="imp-grp"><th rowspan="2">Fecha</th><th rowspan="2">Hora</th><th colspan="4" class="num g">Copia</th><th colspan="4" class="num g">Impresión</th><th colspan="2" class="num g">Escaneado</th><th rowspan="2"></th></tr>
+      <tr class="imp-grp"><th rowspan="2">Fecha</th><th rowspan="2">Hora</th><th colspan="4" class="num g">Copia</th><th colspan="4" class="num g">Impresión</th><th colspan="2" class="num g">Escaneado</th><th rowspan="2" class="num">Total</th><th rowspan="2"></th></tr>
       <tr><th class="num">Todo color</th><th class="num">B/N</th><th class="num">Personal.</th><th class="num">Dos col.</th><th class="num">Todo color</th><th class="num">B/N</th><th class="num">Personal.</th><th class="num">Dos col.</th><th class="num">Color</th><th class="num">B/N</th></tr>
     </thead>
     <tbody>${rows.map(r=>{const t=fmtFH(r.fecha_hora);return `<tr>
       <td class="vg-date">${t.f}</td><td class="vg-date">${t.h}</td>
-      ${cols.map(k=>`<td class="num">${fmtNum(r[k])}</td>`).join('')}
+      ${cols.map(k=>`<td class="num">${fmtNum(r[k])}</td>`).join('')}<td class="num"><b>${fmtNum(r.contador_total)}</b></td>
       <td><button class="btn btn-danger btn-sm" onclick="borrarLecturaImp(${r.id})" title="Borrar esta lectura">${I.trash}</button></td></tr>`;}).join('')}</tbody></table>`;
   const bb = document.getElementById('btnBorrarHist'); if(bb) bb.style.display = 'inline-flex';
 }
@@ -1140,6 +1196,7 @@ async function borrarLecturaImp(id){
   if(!confirm('¿Borrar esta lectura?')) return;
   await api({action:'borrar_lectura'}, {id});
   toast('Lectura borrada', I.trash);
+  cargarTotalesImp();
   cargarLecturasImp();
 }
 
@@ -1147,6 +1204,7 @@ async function borrarHistorialImp(){
   if(!impSel || !confirm('¿Borrar todo el historial de lecturas de esta impresora?')) return;
   await api({action:'vaciar_lecturas'}, {id: impSel});
   toast('Historial borrado', I.trash);
+  cargarTotalesImp();
   cargarLecturasImp();
 }
 
@@ -1162,6 +1220,11 @@ function renderImpActual(l){
       ${card(I.copy, 'Copiadora', [['A todo color',l.copia_color],['Blanco y Negro',l.copia_bn],['Color personalizado',l.copia_color_pers],['Dos colores',l.copia_dos_colores]])}
       ${card(I.printer, 'Impresora', [['A todo color',l.impresion_color],['Blanco y Negro',l.impresion_bn],['Color personalizado',l.impresion_color_pers],['Dos colores',l.impresion_dos_colores]])}
       ${card(I.scan, 'Envío por escáner', [['Color',l.escaneo_color],['Blanco y Negro',l.escaneo_bn]])}
+      ${card(I.chart, 'Total', [['Contador total',l.contador_total],
+          ...(l.total_color!=null ? [['A todo color',l.total_color]] : []),
+          ...(l.total_bn!=null ? [['Blanco y Negro',l.total_bn]] : []),
+          ...(l.total_color_pers!=null ? [['Color personalizado',l.total_color_pers]] : []),
+          ...(l.total_dos_colores!=null ? [['Dos colores',l.total_dos_colores]] : [])])}
     </div>`;
 }
 
@@ -1179,6 +1242,7 @@ async function consultarImpresora(silencioso=false){
     } else {
       msg.innerHTML = '';
       if(!silencioso) toast('Lectura guardada');
+      cargarTotalesImp();
       await cargarLecturasImp();
     }
   } catch(e){

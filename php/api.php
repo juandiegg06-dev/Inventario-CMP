@@ -201,6 +201,11 @@ CREATE TABLE IF NOT EXISTS `impresora_lecturas` (
   `impresion_dos_colores` int(11) DEFAULT NULL,
   `escaneo_color` int(11) DEFAULT NULL,
   `escaneo_bn` int(11) DEFAULT NULL,
+  `contador_total` int(11) DEFAULT NULL,
+  `total_color` int(11) DEFAULT NULL,
+  `total_bn` int(11) DEFAULT NULL,
+  `total_color_pers` int(11) DEFAULT NULL,
+  `total_dos_colores` int(11) DEFAULT NULL,
   `crudo` mediumtext DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_lec_impresora` (`impresora_id`,`fecha_hora`),
@@ -208,7 +213,7 @@ CREATE TABLE IF NOT EXISTS `impresora_lecturas` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
     // Tablas creadas antes de agregar color personalizado y dos colores
-    foreach (['copia_color_pers','copia_dos_colores','impresion_color_pers','impresion_dos_colores'] as $col) {
+    foreach (['copia_color_pers','copia_dos_colores','impresion_color_pers','impresion_dos_colores','contador_total','total_color','total_bn','total_color_pers','total_dos_colores'] as $col) {
         if (!$pdo->query("SHOW COLUMNS FROM impresora_lecturas LIKE '$col'")->fetch()) {
             $pdo->exec("ALTER TABLE impresora_lecturas ADD COLUMN `$col` int(11) DEFAULT NULL");
         }
@@ -319,10 +324,27 @@ function parsearContadores(string $html): array {
         'copia_color'=>null,'copia_bn'=>null,'copia_color_pers'=>null,'copia_dos_colores'=>null,
         'impresion_color'=>null,'impresion_bn'=>null,'impresion_color_pers'=>null,'impresion_dos_colores'=>null,
         'escaneo_color'=>null,'escaneo_bn'=>null,
+        'contador_total'=>null,'total_color'=>null,'total_bn'=>null,'total_color_pers'=>null,'total_dos_colores'=>null,
     ];
     foreach ($pares as $p) {
-        $sec = sinAcentos($p['seccion']);
+        $sec = trim(sinAcentos($p['seccion']));
         $et  = sinAcentos($p['etiqueta']);
+        // Contador total de la impresora (encabezado de la pagina) y su desglose
+        if ($sec === '' || $sec === 'total') {
+            if (preg_match('/^(contador\s+)?total$/', trim($et))) {
+                if ($campos['contador_total'] === null) $campos['contador_total'] = $p['valor'];
+                continue;
+            }
+            if ($sec === 'total') {
+                if (preg_match('/personaliz|custom/', $et)) $k2 = 'total_color_pers';
+                elseif (preg_match('/dos colores|two.?color/', $et)) $k2 = 'total_dos_colores';
+                elseif (preg_match('/negro|b\/n|blanco|mono|black/', $et) && !preg_match('/color/', $et)) $k2 = 'total_bn';
+                elseif (preg_match('/color/', $et) && !preg_match('/un color|single/', $et)) $k2 = 'total_color';
+                else $k2 = null;
+                if ($k2 && $campos[$k2] === null) $campos[$k2] = $p['valor'];
+                continue;
+            }
+        }
         if (preg_match('/total|fax|otros|cobertura|a3|dlt|duplex|banner|enviar\/tx/', $sec . ' ' . $et)) continue;
         if (preg_match('/copi|copy/', $sec)) $cat = 'copia';
         elseif (preg_match('/escan|scan/', $sec)) $cat = 'escaneo';
@@ -368,6 +390,23 @@ function consultarImpresora(string $ip): array {
         }
     }
     return [null, $ultimoErr ?: 'No se pudo conectar con la impresora.', $ultimoTxt];
+}
+
+/** Ultima lectura de cada impresora y la suma de todas (contador total y cada categoria). */
+function totalesImpresoras(PDO $pdo): array {
+    $campos = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores','impresion_color','impresion_bn',
+               'impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn','contador_total'];
+    $rows = $pdo->query("SELECT i.id, i.nombre, i.ip, l.fecha_hora, " . implode(', ', array_map(fn($c) => "l.$c", $campos)) . "
+        FROM impresoras i
+        LEFT JOIN impresora_lecturas l ON l.id = (SELECT x.id FROM impresora_lecturas x WHERE x.impresora_id = i.id ORDER BY x.fecha_hora DESC, x.id DESC LIMIT 1)
+        ORDER BY i.nombre")->fetchAll();
+    $suma = array_fill_keys($campos, 0);
+    $conLectura = 0;
+    foreach ($rows as $r) {
+        if ($r['fecha_hora'] !== null) $conLectura++;
+        foreach ($campos as $c) $suma[$c] += (int)($r[$c] ?? 0);
+    }
+    return ['impresoras' => $rows, 'suma' => $suma, 'con_lectura' => $conLectura];
 }
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -867,7 +906,8 @@ switch ($action) {
         }
         $c = $r['campos'];
         $cols = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores','impresion_color','impresion_bn',
-                 'impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn'];
+                 'impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn',
+                 'contador_total','total_color','total_bn','total_color_pers','total_dos_colores'];
         $vals = [$imp['id']];
         foreach ($cols as $k) $vals[] = $c[$k];
         $vals[] = json_encode($r['pares'], JSON_UNESCAPED_UNICODE);
@@ -879,6 +919,12 @@ switch ($action) {
         $fila['pares'] = $r['pares'];
         unset($fila['crudo']);
         echo json_encode(['ok' => true, 'lectura' => $fila]);
+        break;
+
+    case 'impresoras_totales':
+        $pdo = getDB();
+        asegurarTablasImpresoras($pdo);
+        echo json_encode(totalesImpresoras($pdo));
         break;
 
     case 'borrar_lectura':
@@ -901,7 +947,7 @@ switch ($action) {
         $pdo = getDB();
         asegurarTablasImpresoras($pdo);
         $st = $pdo->prepare("SELECT id, fecha_hora, copia_color, copia_bn, copia_color_pers, copia_dos_colores, impresion_color, impresion_bn,
-            impresion_color_pers, impresion_dos_colores, escaneo_color, escaneo_bn
+            impresion_color_pers, impresion_dos_colores, escaneo_color, escaneo_bn, contador_total
             FROM impresora_lecturas WHERE impresora_id = ? ORDER BY fecha_hora DESC, id DESC LIMIT 100");
         $st->execute([(int)($_GET['id'] ?? 0)]);
         echo json_encode(['lecturas' => $st->fetchAll()]);
@@ -967,7 +1013,10 @@ switch ($action) {
             else $vigencias['vigentes']++;
         }
 
-        echo json_encode(compact('resp','equipos','areas','perifericos','lista_resp','lista_areas','lista_eq','por_area','por_componente','vigencias'));
+        asegurarTablasImpresoras($pdo);
+        $impresoras = totalesImpresoras($pdo);
+
+        echo json_encode(compact('resp','equipos','areas','perifericos','lista_resp','lista_areas','lista_eq','por_area','por_componente','vigencias','impresoras'));
         break;
 
     default:
