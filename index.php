@@ -461,6 +461,11 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .req-firma h4{font-size:.74rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;margin-bottom:.6rem;color:var(--ink-2)}
 .req-firma .rf{margin-bottom:.5rem}
 .req-firma .rf input{background:#fff}
+.firma-datos{display:grid;grid-template-columns:auto 1fr;gap:.45rem .8rem;font-size:.84rem;margin-bottom:.4rem}
+.firma-datos dt{font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A4A22;background:#FFE6D6;border-radius:6px;padding:.18rem .5rem;height:fit-content;align-self:center}
+.firma-datos dd{font-weight:600;color:var(--ink);align-self:center}
+.firma-fija{display:flex;align-items:center;gap:.35rem;font-size:.72rem;color:var(--mute);margin-top:.2rem}
+.firma-fija .ic{width:13px;height:13px;color:var(--c-deep)}
 .req-firma.vacia{display:flex;flex-direction:column;justify-content:space-between;min-height:120px}
 .req-firma.vacia p{font-size:.76rem;color:var(--mute);border-top:1px dashed var(--line-2);padding-top:.5rem;text-align:center}
 .req-acciones{display:flex;justify-content:flex-end;align-items:center;gap:.55rem;padding:1rem 1.5rem;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
@@ -2209,7 +2214,7 @@ function pintarFormReq(){
         <div class="rf span4"><label for="reqEmpresa">Empresa</label><select id="reqEmpresa" name="empresa_cod" required>${opciones(L.empresas, def('empresa_cod', L.empresas))}</select></div>
         <div class="rf span2"><label for="reqArea">Área</label><select id="reqArea" name="area_cod" required>${opciones(L.areas, b.area_cod, true)}</select></div>
         <div class="rf span2"></div>
-        <div class="rf span2"><label for="reqSol">Solicitante</label><select id="reqSol" name="solicitante_cod" required onchange="reqSolicitanteCambio()">${opciones(L.solicitantes, b.solicitante_cod, true)}</select></div>
+        <div class="rf span2"><label for="reqSol">Solicitante</label><select id="reqSol" name="solicitante_cod" required>${opciones(L.solicitantes, b.solicitante_cod, true)}</select></div>
         <div class="rf span2"><label for="reqAut">Autorizado por</label><select id="reqAut" name="autorizado_por" required>${opciones(L.autorizado_por, def('autorizado_por', L.autorizado_por))}</select></div>
       </div>
 
@@ -2226,9 +2231,12 @@ function pintarFormReq(){
       <div class="req-firmas">
         <div class="req-firma">
           <h4>Solicitante</h4>
-          <div class="rf"><label for="reqSolNombre">Nombre</label><input id="reqSolNombre" readonly></div>
-          <div class="rf"><label for="reqCedula">Cédula</label><input id="reqCedula" name="sol_cedula" inputmode="numeric" maxlength="30" value="${esc(b.sol_cedula ?? '')}"></div>
-          <div class="rf"><label for="reqCargo">Cargo</label><input id="reqCargo" name="sol_cargo" maxlength="150" value="${esc(b.sol_cargo ?? '')}"></div>
+          <dl class="firma-datos">
+            <dt>Nombre</dt><dd id="reqSolNombre">${esc(L.firma_solicitante.nombre)}</dd>
+            <dt>Cédula</dt><dd id="reqCedula">${esc(L.firma_solicitante.cedula)}</dd>
+            <dt>Cargo</dt><dd id="reqCargo">${esc(L.firma_solicitante.cargo)}</dd>
+          </dl>
+          <p class="firma-fija">${I.shield}<span>Datos fijos del formato</span></p>
         </div>
         <div class="req-firma vacia"><h4>Revisó</h4><p>Firma a mano en el documento impreso</p></div>
         <div class="req-firma vacia"><h4>Aprobó</h4><p>Firma a mano en el documento impreso</p></div>
@@ -2257,25 +2265,16 @@ function reqCambio(e){
   actualizarCodigoReq();
   reqBorrador = leerFormReq();
 }
-function reqSolicitanteCambio(){
-  const cod = document.getElementById('reqSol').value;
-  const prev = reqListas.previos[cod];
-  // Rellena cédula y cargo con lo último que usó ese solicitante (si los campos están vacíos)
-  const ced = document.getElementById('reqCedula'), car = document.getElementById('reqCargo');
-  if(prev){ if(!ced.value) ced.value = prev.cedula || ''; if(!car.value) car.value = prev.cargo || ''; }
-}
 function actualizarCodigoReq(){
   const v = id => document.getElementById(id)?.value || '';
   const part = (x, ph) => x ? esc(x) : `<i>${ph}</i>`;
   const el = document.getElementById('reqCodigo');
   if(el) el.innerHTML = `${part(v('reqEmpresa'),'EMP')}-${part(v('reqArea'),'ÁREA')}-${part(v('reqSol'),'SOL')}-<i>${reqListas.siguiente}</i>`;
-  const sol = reqListas.solicitantes.find(s=>s.cod === v('reqSol'));
-  const nom = document.getElementById('reqSolNombre'); if(nom) nom.value = sol ? sol.nombre : '';
 }
 function leerFormReq(){
   const f = document.getElementById('reqForm'); if(!f) return reqBorrador;
   const d = {};
-  ['prioridad','empresa_cod','area_cod','solicitante_cod','autorizado_por','observaciones','sol_cedula','sol_cargo'].forEach(k=>{ d[k] = f.elements[k].value; });
+  ['prioridad','empresa_cod','area_cod','solicitante_cod','autorizado_por','observaciones'].forEach(k=>{ d[k] = f.elements[k].value; });
   d.items = [...document.querySelectorAll('#reqItems tbody tr')].map(tr=>{
     const o = {}; tr.querySelectorAll('[data-k]').forEach(e=>{ o[e.dataset.k] = e.value; }); return o;
   });
@@ -2293,7 +2292,6 @@ function validarReqLocal(d){
   if(!d.area_cod) return ['reqArea','Selecciona el área.'];
   if(!d.solicitante_cod) return ['reqSol','Selecciona el solicitante.'];
   if(!d.autorizado_por) return ['reqAut','Selecciona quién autoriza.'];
-  if(d.sol_cedula && !/^[0-9.\s-]+$/.test(d.sol_cedula)) return ['reqCedula','La cédula solo puede tener números.'];
   let hay = false;
   for(let i = 0; i < d.items.length; i++){
     const it = d.items[i], fila = document.querySelectorAll('#reqItems tbody tr')[i];

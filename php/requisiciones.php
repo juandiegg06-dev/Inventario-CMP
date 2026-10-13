@@ -13,6 +13,14 @@
 return [
     'consecutivo_inicial' => 1,
 
+    // Bloque de firma del SOLICITANTE en el formato (fijo: no se edita desde la página).
+    // Revisó y Aprobó quedan en blanco para firmar a mano.
+    'firma_solicitante' => [
+        'nombre' => 'JAVIER ALEXANDER CRIADO RODRIGUEZ',
+        'cedula' => '1193275333',
+        'cargo'  => 'Responsable Área de Tecnología',
+    ],
+
     // Datos fijos del encabezado del formato
     'formato' => ['codigo' => 'MA-PC-FT-001', 'version' => '1', 'fecha' => '15 de marzo del 2022'],
 

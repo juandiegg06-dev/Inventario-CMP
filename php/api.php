@@ -511,6 +511,7 @@ CREATE TABLE IF NOT EXISTS `requisiciones` (
   `observaciones` text DEFAULT NULL,
   `sol_cedula` varchar(30) DEFAULT NULL,
   `sol_cargo` varchar(150) DEFAULT NULL,
+  `firma_nombre` varchar(200) DEFAULT NULL,
   `creado_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_req_consecutivo` (`consecutivo`)
@@ -531,6 +532,10 @@ CREATE TABLE IF NOT EXISTS `requisicion_items` (
   CONSTRAINT `fk_reqitem_req` FOREIGN KEY (`requisicion_id`) REFERENCES `requisiciones` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
+    // Instalaciones que crearon la tabla antes de existir la columna
+    if (!$pdo->query("SHOW COLUMNS FROM requisiciones LIKE 'firma_nombre'")->fetch()) {
+        $pdo->exec("ALTER TABLE requisiciones ADD COLUMN `firma_nombre` varchar(200) DEFAULT NULL AFTER `sol_cargo`");
+    }
     $listo = true;
 }
 
@@ -553,9 +558,6 @@ function validarRequisicion(array $b): array {
     if (!isset($cfg['solicitantes'][$solCod]))      return [null, null, 'Selecciona el solicitante.'];
     if (!in_array($aut, $cfg['autorizado_por'], true)) return [null, null, 'Selecciona quién autoriza.'];
     if (!in_array($pri, $cfg['prioridades'], true)) return [null, null, 'Selecciona la prioridad.'];
-
-    $cedula = textoOpcional($b['sol_cedula'] ?? '', 30);
-    if ($cedula !== null && !preg_match('/^[0-9.\s-]+$/', $cedula)) return [null, null, 'La cédula solo puede tener números.'];
 
     $items = [];
     $filas = is_array($b['items'] ?? null) ? $b['items'] : [];
@@ -584,8 +586,10 @@ function validarRequisicion(array $b): array {
         'solicitante_cod' => $solCod, 'solicitante_nombre' => $cfg['solicitantes'][$solCod],
         'autorizado_por' => $aut,
         'observaciones' => textoOpcional($b['observaciones'] ?? '', 2000),
-        'sol_cedula' => $cedula,
-        'sol_cargo' => textoOpcional($b['sol_cargo'] ?? '', 150),
+        // La firma del solicitante es fija (php/requisiciones.php); se ignora lo que llegue del formulario
+        'firma_nombre' => $cfg['firma_solicitante']['nombre'] ?? null,
+        'sol_cedula' => $cfg['firma_solicitante']['cedula'] ?? null,
+        'sol_cargo' => $cfg['firma_solicitante']['cargo'] ?? null,
     ], $items, null];
 }
 
@@ -1310,12 +1314,6 @@ switch ($action) {
         asegurarTablasRequisiciones($pdo);
         $cfg = requisicionesConfig();
         $par = fn($arr) => array_map(fn($k, $v) => ['cod' => (string)$k, 'nombre' => $v], array_keys($arr), $arr);
-        // Última cédula y cargo usados por cada solicitante (para no escribirlos cada vez)
-        $previos = [];
-        foreach ($pdo->query("SELECT r.solicitante_cod, r.sol_cedula, r.sol_cargo FROM requisiciones r
-                JOIN (SELECT solicitante_cod, MAX(id) id FROM requisiciones GROUP BY solicitante_cod) u ON u.id = r.id") as $p) {
-            $previos[$p['solicitante_cod']] = ['cedula' => $p['sol_cedula'], 'cargo' => $p['sol_cargo']];
-        }
         echo json_encode([
             'formato' => $cfg['formato'],
             'empresas' => $par($cfg['empresas']),
@@ -1328,7 +1326,7 @@ switch ($action) {
             'max_items' => REQ_MAX_ITEMS,
             'siguiente' => siguienteConsecutivo($pdo),
             'hoy' => $pdo->query("SELECT CURDATE()")->fetchColumn(),
-            'previos' => (object)$previos,
+            'firma_solicitante' => $cfg['firma_solicitante'] ?? ['nombre' => '', 'cedula' => '', 'cargo' => ''],
         ]);
         break;
 
@@ -1375,10 +1373,10 @@ switch ($action) {
                 $cons = siguienteConsecutivo($pdo, true);
                 $codigo = "{$d['empresa_cod']}-{$d['area_cod']}-{$d['solicitante_cod']}-$cons";
                 $pdo->prepare("INSERT INTO requisiciones (consecutivo, codigo, fecha, prioridad, empresa_cod, empresa_nombre, area_cod, area_nombre,
-                        solicitante_cod, solicitante_nombre, autorizado_por, observaciones, sol_cedula, sol_cargo)
-                    VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                        solicitante_cod, solicitante_nombre, autorizado_por, observaciones, sol_cedula, sol_cargo, firma_nombre)
+                    VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                     ->execute([$cons, $codigo, $d['prioridad'], $d['empresa_cod'], $d['empresa_nombre'], $d['area_cod'], $d['area_nombre'],
-                        $d['solicitante_cod'], $d['solicitante_nombre'], $d['autorizado_por'], $d['observaciones'], $d['sol_cedula'], $d['sol_cargo']]);
+                        $d['solicitante_cod'], $d['solicitante_nombre'], $d['autorizado_por'], $d['observaciones'], $d['sol_cedula'], $d['sol_cargo'], $d['firma_nombre']]);
                 $id = (int)$pdo->lastInsertId();
                 $ins = $pdo->prepare("INSERT INTO requisicion_items (requisicion_id, item, cantidad, unidad, articulo, proveedor, centro_trabajo) VALUES (?,?,?,?,?,?,?)");
                 foreach ($items as $n => $it) {

@@ -129,7 +129,7 @@
     sy += espH;
     celda(M, sy, wS, lH, 'FIRMA', {size:6.5});
     sy += lH;
-    [['NOMBRE:', req.solicitante_nombre], ['CEDULA:', req.sol_cedula || ''], ['CARGO:', req.sol_cargo || '']].forEach(([l, v]) => {
+    [['NOMBRE:', req.firma_nombre || req.solicitante_nombre], ['CEDULA:', req.sol_cedula || ''], ['CARGO:', req.sol_cargo || '']].forEach(([l, v]) => {
       celda(M, sy, wEt, lH, l, {bold:true, size:6.5, align:'left'});
       celda(M + wEt, sy, wS - wEt, lH, v, {size:6.5});
       sy += lH;
