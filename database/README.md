@@ -30,3 +30,13 @@ Tablas `impresoras` y `impresora_lecturas` (se crean solas; `impresoras.sql` par
 Las impresoras **no se agregan ni se eliminan desde la página**: se definen en `php/impresoras.php` (IP, nombre y ubicación). Al abrir la página, la tabla `impresoras` se sincroniza con esa lista. Si quitas una impresora del archivo, deja de mostrarse pero su historial de lecturas se conserva.
 
 La actualización automática de contadores (20, 30, 40 min, 1 h, 3 h o un intervalo personalizado de 1 a 1440 minutos) se ejecuta desde el navegador, así que solo funciona mientras la página está abierta en la sección Impresoras.
+
+## Requisiciones
+
+Tablas `requisiciones` y `requisicion_items` (se crean solas; `requisiciones.sql` para crearlas a mano). Reproducen el FORMATO DE REQUISICIÓN DE COMPRAS (MA-PC-FT-001): la página permite llenarlo, lo guarda en el historial y descarga el PDF.
+
+- **Listas** (empresas, áreas, solicitantes, autorizado por, prioridades, unidades y centros de trabajo): se editan en `php/requisiciones.php`. Cada requisición guarda una copia de los nombres, así que cambiar una lista no altera las ya exportadas.
+- **Consecutivo**: se asigna al guardar/exportar, de uno en uno y sin repetirse (aunque dos personas exporten al mismo tiempo). `consecutivo_inicial` en `php/requisiciones.php` define el número de la primera.
+- **REQ N°**: `EMPRESA-ÁREA-SOLICITANTE-CONSECUTIVO`, por ejemplo `CMPN-ST-44-7`.
+- **PDF**: se genera en el navegador con `js/jspdf.umd.min.js` (incluido en el proyecto, no necesita internet) y `js/requisicion-pdf.js`. El logo está en `img/logo-coomulpinort.jpg`.
+

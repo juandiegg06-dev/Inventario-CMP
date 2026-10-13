@@ -480,6 +480,126 @@ function totalesImpresoras(PDO $pdo): array {
     return ['impresoras' => $rows, 'suma' => $suma, 'con_lectura' => $conLectura];
 }
 
+// ---------------------------------------------------------------------------
+// Requisiciones de compra (formato MA-PC-FT-001). Listas en php/requisiciones.php
+// ---------------------------------------------------------------------------
+const REQ_MAX_ITEMS = 15;   // filas que tiene el formato
+
+function requisicionesConfig(): array {
+    static $cfg = null;
+    if ($cfg === null) $cfg = require __DIR__ . '/requisiciones.php';
+    return $cfg;
+}
+
+function asegurarTablasRequisiciones(PDO $pdo): void {
+    static $listo = false;
+    if ($listo) return;
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `requisiciones` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `consecutivo` int(11) NOT NULL,
+  `codigo` varchar(80) NOT NULL,
+  `fecha` date NOT NULL,
+  `prioridad` varchar(20) NOT NULL,
+  `empresa_cod` varchar(20) NOT NULL,
+  `empresa_nombre` varchar(200) NOT NULL,
+  `area_cod` varchar(20) NOT NULL,
+  `area_nombre` varchar(150) NOT NULL,
+  `solicitante_cod` int(11) NOT NULL,
+  `solicitante_nombre` varchar(200) NOT NULL,
+  `autorizado_por` varchar(200) NOT NULL,
+  `observaciones` text DEFAULT NULL,
+  `sol_cedula` varchar(30) DEFAULT NULL,
+  `sol_cargo` varchar(150) DEFAULT NULL,
+  `creado_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_req_consecutivo` (`consecutivo`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `requisicion_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `requisicion_id` int(11) NOT NULL,
+  `item` int(11) NOT NULL,
+  `cantidad` decimal(12,2) NOT NULL,
+  `unidad` varchar(30) DEFAULT NULL,
+  `articulo` text NOT NULL,
+  `proveedor` varchar(200) DEFAULT NULL,
+  `centro_trabajo` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_reqitem_req` (`requisicion_id`),
+  CONSTRAINT `fk_reqitem_req` FOREIGN KEY (`requisicion_id`) REFERENCES `requisiciones` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+    $listo = true;
+}
+
+function siguienteConsecutivo(PDO $pdo, bool $bloquear = false): int {
+    $ini = max(1, (int)(requisicionesConfig()['consecutivo_inicial'] ?? 1));
+    $max = $pdo->query("SELECT MAX(consecutivo) FROM requisiciones" . ($bloquear ? " FOR UPDATE" : ""))->fetchColumn();
+    return $max === null ? $ini : max($ini, (int)$max + 1);
+}
+
+/** Valida el formulario. Devuelve [datos, items, error]. */
+function validarRequisicion(array $b): array {
+    $cfg = requisicionesConfig();
+    $empCod = (string)($b['empresa_cod'] ?? '');
+    $areaCod = (string)($b['area_cod'] ?? '');
+    $solCod = (int)($b['solicitante_cod'] ?? 0);
+    $aut = trim((string)($b['autorizado_por'] ?? ''));
+    $pri = (string)($b['prioridad'] ?? '');
+    if (!isset($cfg['empresas'][$empCod]))          return [null, null, 'Selecciona la empresa.'];
+    if (!isset($cfg['areas'][$areaCod]))            return [null, null, 'Selecciona el área.'];
+    if (!isset($cfg['solicitantes'][$solCod]))      return [null, null, 'Selecciona el solicitante.'];
+    if (!in_array($aut, $cfg['autorizado_por'], true)) return [null, null, 'Selecciona quién autoriza.'];
+    if (!in_array($pri, $cfg['prioridades'], true)) return [null, null, 'Selecciona la prioridad.'];
+
+    $cedula = textoOpcional($b['sol_cedula'] ?? '', 30);
+    if ($cedula !== null && !preg_match('/^[0-9.\s-]+$/', $cedula)) return [null, null, 'La cédula solo puede tener números.'];
+
+    $items = [];
+    $filas = is_array($b['items'] ?? null) ? $b['items'] : [];
+    if (count($filas) > REQ_MAX_ITEMS) return [null, null, 'El formato admite máximo ' . REQ_MAX_ITEMS . ' ítems.'];
+    foreach ($filas as $i => $f) {
+        if (!is_array($f)) continue;
+        $cant = trim(str_replace(',', '.', (string)($f['cantidad'] ?? '')));
+        $art = textoOpcional($f['articulo'] ?? '', 1000);
+        $uni = textoOpcional($f['unidad'] ?? '', 30);
+        $prov = textoOpcional($f['proveedor'] ?? '', 200);
+        $cen = textoOpcional($f['centro_trabajo'] ?? '', 100);
+        if ($cant === '' && $art === null && $uni === null && $prov === null && $cen === null) continue; // fila vacía
+        $n = $i + 1;
+        if ($art === null) return [null, null, "Fila $n: escribe el artículo o servicio."];
+        if ($cant === '' || !is_numeric($cant) || (float)$cant <= 0) return [null, null, "Fila $n: la cantidad debe ser un número mayor que 0."];
+        if ($uni !== null && !in_array($uni, $cfg['unidades'], true)) return [null, null, "Fila $n: unidad no válida."];
+        if ($cen !== null && !in_array($cen, $cfg['centros_trabajo'], true)) return [null, null, "Fila $n: centro de trabajo no válido."];
+        $items[] = ['cantidad' => round((float)$cant, 2), 'unidad' => $uni, 'articulo' => $art, 'proveedor' => $prov, 'centro_trabajo' => $cen];
+    }
+    if (!$items) return [null, null, 'Agrega al menos un artículo o servicio.'];
+
+    return [[
+        'prioridad' => $pri,
+        'empresa_cod' => $empCod, 'empresa_nombre' => $cfg['empresas'][$empCod],
+        'area_cod' => $areaCod, 'area_nombre' => $cfg['areas'][$areaCod],
+        'solicitante_cod' => $solCod, 'solicitante_nombre' => $cfg['solicitantes'][$solCod],
+        'autorizado_por' => $aut,
+        'observaciones' => textoOpcional($b['observaciones'] ?? '', 2000),
+        'sol_cedula' => $cedula,
+        'sol_cargo' => textoOpcional($b['sol_cargo'] ?? '', 150),
+    ], $items, null];
+}
+
+function obtenerRequisicion(PDO $pdo, int $id): ?array {
+    $st = $pdo->prepare("SELECT * FROM requisiciones WHERE id = ?");
+    $st->execute([$id]);
+    $r = $st->fetch();
+    if (!$r) return null;
+    $it = $pdo->prepare("SELECT item, cantidad, unidad, articulo, proveedor, centro_trabajo FROM requisicion_items WHERE requisicion_id = ? ORDER BY item");
+    $it->execute([$id]);
+    $r['items'] = $it->fetchAll();
+    return $r;
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
@@ -491,7 +611,8 @@ if (in_array($method, ['POST','PUT'])) {
 
 // Solo estas acciones son de consulta; todas las demás modifican datos y deben llegar por POST
 const ACCIONES_LECTURA = ['responsables','responsable','get_equipo','buscar_equipos','papelera','tareas','vigencias',
-    'get_vigencia','impresoras','impresoras_totales','lecturas_impresora','stats'];
+    'get_vigencia','impresoras','impresoras_totales','lecturas_impresora','stats',
+    'requisicion_listas','requisiciones','requisicion'];
 if ($action !== '' && !in_array($action, ACCIONES_LECTURA, true) && $method !== 'POST') {
     responderError(405, 'Esta acción solo acepta peticiones POST.');
     exit;
@@ -1181,6 +1302,99 @@ switch ($action) {
         $impresoras = totalesImpresoras($pdo);
 
         echo json_encode(compact('resp','equipos','areas','perifericos','lista_resp','lista_areas','lista_eq','por_area','por_componente','vigencias','impresoras'));
+        break;
+
+    // ----- Requisiciones de compra -----
+    case 'requisicion_listas':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        $cfg = requisicionesConfig();
+        $par = fn($arr) => array_map(fn($k, $v) => ['cod' => (string)$k, 'nombre' => $v], array_keys($arr), $arr);
+        // Última cédula y cargo usados por cada solicitante (para no escribirlos cada vez)
+        $previos = [];
+        foreach ($pdo->query("SELECT r.solicitante_cod, r.sol_cedula, r.sol_cargo FROM requisiciones r
+                JOIN (SELECT solicitante_cod, MAX(id) id FROM requisiciones GROUP BY solicitante_cod) u ON u.id = r.id") as $p) {
+            $previos[$p['solicitante_cod']] = ['cedula' => $p['sol_cedula'], 'cargo' => $p['sol_cargo']];
+        }
+        echo json_encode([
+            'formato' => $cfg['formato'],
+            'empresas' => $par($cfg['empresas']),
+            'areas' => $par($cfg['areas']),
+            'solicitantes' => $par($cfg['solicitantes']),
+            'autorizado_por' => $cfg['autorizado_por'],
+            'prioridades' => $cfg['prioridades'],
+            'unidades' => $cfg['unidades'],
+            'centros_trabajo' => $cfg['centros_trabajo'],
+            'max_items' => REQ_MAX_ITEMS,
+            'siguiente' => siguienteConsecutivo($pdo),
+            'hoy' => $pdo->query("SELECT CURDATE()")->fetchColumn(),
+            'previos' => (object)$previos,
+        ]);
+        break;
+
+    case 'requisiciones':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        $q = trim($_GET['q'] ?? '');
+        $sql = "SELECT r.id, r.consecutivo, r.codigo, r.fecha, r.prioridad, r.area_nombre, r.solicitante_nombre, r.creado_at,
+                    (SELECT COUNT(*) FROM requisicion_items i WHERE i.requisicion_id = r.id) AS total_items,
+                    (SELECT i.articulo FROM requisicion_items i WHERE i.requisicion_id = r.id ORDER BY i.item LIMIT 1) AS primer_item
+                FROM requisiciones r";
+        $params = [];
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $sql .= " WHERE r.codigo LIKE ? OR r.solicitante_nombre LIKE ? OR r.area_nombre LIKE ? OR r.observaciones LIKE ?
+                      OR CAST(r.consecutivo AS CHAR) = ?
+                      OR EXISTS (SELECT 1 FROM requisicion_items i WHERE i.requisicion_id = r.id AND (i.articulo LIKE ? OR i.proveedor LIKE ?))";
+            $params = [$like, $like, $like, $like, $q, $like, $like];
+        }
+        $st = $pdo->prepare($sql . " ORDER BY r.consecutivo DESC LIMIT 500");
+        $st->execute($params);
+        echo json_encode(['requisiciones' => $st->fetchAll()]);
+        break;
+
+    case 'requisicion':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        $r = obtenerRequisicion($pdo, (int)($_GET['id'] ?? 0));
+        if (!$r) { responderError(404, 'Requisición no encontrada.'); break; }
+        echo json_encode(['requisicion' => $r]);
+        break;
+
+    // Guarda la requisición y le asigna el siguiente consecutivo (nunca se repite)
+    case 'crear_requisicion':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        [$d, $items, $err] = validarRequisicion($body);
+        if ($err) { responderError(400, $err); break; }
+        $nuevoId = null;
+        for ($intento = 0; $intento < 6 && $nuevoId === null; $intento++) {
+            if ($intento > 0) usleep(random_int(20000, 120000));   // espera corta antes de reintentar
+            try {
+                $pdo->beginTransaction();
+                $cons = siguienteConsecutivo($pdo, true);
+                $codigo = "{$d['empresa_cod']}-{$d['area_cod']}-{$d['solicitante_cod']}-$cons";
+                $pdo->prepare("INSERT INTO requisiciones (consecutivo, codigo, fecha, prioridad, empresa_cod, empresa_nombre, area_cod, area_nombre,
+                        solicitante_cod, solicitante_nombre, autorizado_por, observaciones, sol_cedula, sol_cargo)
+                    VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                    ->execute([$cons, $codigo, $d['prioridad'], $d['empresa_cod'], $d['empresa_nombre'], $d['area_cod'], $d['area_nombre'],
+                        $d['solicitante_cod'], $d['solicitante_nombre'], $d['autorizado_por'], $d['observaciones'], $d['sol_cedula'], $d['sol_cargo']]);
+                $id = (int)$pdo->lastInsertId();
+                $ins = $pdo->prepare("INSERT INTO requisicion_items (requisicion_id, item, cantidad, unidad, articulo, proveedor, centro_trabajo) VALUES (?,?,?,?,?,?,?)");
+                foreach ($items as $n => $it) {
+                    $ins->execute([$id, $n + 1, $it['cantidad'], $it['unidad'], $it['articulo'], $it['proveedor'], $it['centro_trabajo']]);
+                }
+                $pdo->commit();
+                $nuevoId = $id;
+            } catch (PDOException $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                // Dos personas exportando al mismo tiempo: consecutivo duplicado (1062), bloqueo mutuo (1213)
+                // o espera de bloqueo (1205). Se reintenta con el siguiente número; cualquier otro error se reporta.
+                if (!in_array((int)($e->errorInfo[1] ?? 0), [1062, 1213, 1205], true)) throw $e;
+            }
+        }
+        if ($nuevoId === null) { responderError(409, 'No se pudo asignar el consecutivo. Intenta de nuevo.'); break; }
+        echo json_encode(['ok' => true, 'requisicion' => obtenerRequisicion($pdo, $nuevoId)]);
         break;
 
     default:

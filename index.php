@@ -417,6 +417,61 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .toast .ic{color:var(--accent-ink);background:var(--accent);border-radius:50%;padding:3px;width:22px;height:22px}
 .toast.show{transform:translate(-50%,0);opacity:1;visibility:visible}
 
+/* ================= Requisiciones ================= */
+.seg{display:inline-flex;gap:3px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;margin-bottom:1.2rem}
+.seg button{border:none;background:none;cursor:pointer;padding:.5rem 1rem;border-radius:999px;font-size:.84rem;font-weight:700;color:var(--ink-2);display:inline-flex;align-items:center;gap:.45rem;transition:background .2s var(--ease),color .2s}
+.seg button:hover{background:var(--soft-2)}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.seg .eq-count{background:rgba(255,255,255,.6)}
+.req-sheet{padding:0;overflow:hidden;animation:rise .4s var(--ease)}
+.req-head{display:grid;grid-template-columns:150px 1fr 230px;border-bottom:1px solid var(--line);background:var(--soft)}
+.req-logo{display:flex;align-items:center;justify-content:center;border-right:1px solid var(--line);padding:.4rem;background:#fff}
+.req-logo img{height:74px;width:auto}
+.req-tit{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:.15rem;padding:.6rem;border-right:1px solid var(--line)}
+.req-tit small{font-size:.72rem;font-weight:600;color:var(--mute);letter-spacing:.04em}
+.req-tit b{font-size:1.05rem;font-weight:800;letter-spacing:-.02em}
+.req-meta{display:grid;grid-template-columns:auto 1fr;font-size:.74rem;align-content:center}
+.req-meta span{padding:.28rem .7rem;border-bottom:1px solid var(--line)}
+.req-meta span:nth-child(odd){font-weight:800;color:var(--ink-2)}
+.req-meta span:nth-last-child(-n+2){border-bottom:none}
+.req-body{padding:1.4rem 1.5rem 1.5rem}
+.req-top{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem 1rem;margin-bottom:1rem}
+.req-top .span2{grid-column:span 2}.req-top .span4{grid-column:1/-1}
+.rf{display:flex;flex-direction:column;gap:.3rem;min-width:0}
+.rf label{font-size:.68rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A4A22;background:#FFE6D6;border-radius:6px;padding:.18rem .5rem;width:fit-content}
+.rf input,.rf select,.rf textarea,.req-items input,.req-items select,.req-items textarea{width:100%;min-width:0;padding:.6rem .75rem;border:1px solid var(--line);border-radius:10px;background:var(--soft);font-size:.86rem;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
+.rf input:focus,.rf select:focus,.rf textarea:focus,.req-items input:focus,.req-items select:focus,.req-items textarea:focus{border-color:var(--c-lime);background:#fff;box-shadow:0 0 0 4px rgba(124,130,232,.18)}
+.rf input[readonly]{color:var(--ink-2);background:var(--soft-2);border-color:transparent}
+.req-code{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.req-code b{font-family:var(--mono);font-size:1.15rem;font-weight:500;letter-spacing:.02em;background:#E5F2DC;color:#2C4A1E;border:1px solid #CFE5BF;border-radius:10px;padding:.42rem .8rem}
+.req-code b i{font-style:normal;color:#7A9A66}
+.req-code small{font-size:.74rem;color:var(--mute)}
+.req-items-wrap{border:1px solid var(--line);border-radius:14px;overflow-x:auto;margin:.4rem 0 .6rem}
+.req-items{width:100%;border-collapse:collapse;min-width:920px}
+.req-items th{font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A4A22;background:#FFE6D6;padding:.55rem .5rem;text-align:left;white-space:nowrap}
+.req-items td{padding:.28rem .3rem;border-top:1px solid var(--line);vertical-align:top}
+.req-items td:first-child{width:42px;text-align:center;font-weight:800;color:var(--mute);font-size:.8rem;padding-top:.75rem}
+.req-items input,.req-items select,.req-items textarea{padding:.48rem .55rem;font-size:.82rem;border-radius:8px;background:transparent;border-color:transparent}
+.req-items tr:hover input,.req-items tr:hover select,.req-items tr:hover textarea{background:var(--soft);border-color:var(--line)}
+.req-items textarea{resize:none;min-height:34px;line-height:1.35;overflow:hidden}
+.req-items tr.lleno td:first-child{color:var(--c-deep)}
+.req-nota{background:#EAF4E2;border:1px solid #D6EAC6;color:#3B5530;border-radius:12px;padding:.65rem .9rem;font-size:.78rem;font-style:italic;line-height:1.5;margin-bottom:1.1rem}
+.req-firmas{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:.8rem;margin-top:1.1rem}
+.req-firma{border:1px solid var(--line);border-radius:14px;padding:.85rem .95rem;background:var(--soft)}
+.req-firma h4{font-size:.74rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;margin-bottom:.6rem;color:var(--ink-2)}
+.req-firma .rf{margin-bottom:.5rem}
+.req-firma .rf input{background:#fff}
+.req-firma.vacia{display:flex;flex-direction:column;justify-content:space-between;min-height:120px}
+.req-firma.vacia p{font-size:.76rem;color:var(--mute);border-top:1px dashed var(--line-2);padding-top:.5rem;text-align:center}
+.req-acciones{display:flex;justify-content:flex-end;align-items:center;gap:.55rem;padding:1rem 1.5rem;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
+.req-acciones .hint{margin-right:auto;font-size:.78rem;color:var(--mute)}
+.req-prio{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;font-weight:800;padding:.2rem .6rem;border-radius:999px;background:var(--soft-2);color:var(--ink-2)}
+.req-prio.URGENTE{background:var(--bad-soft);color:var(--bad)}
+.req-prio.ALTA{background:#FFE6D6;color:#8A4A22}
+.req-prio.MEDIA{background:var(--warn-soft);color:var(--warn)}
+.req-prio.BAJA{background:var(--ok-soft);color:var(--ok)}
+.req-n{font-family:var(--mono);font-size:1.05rem;font-weight:500;color:var(--c-deep)}
+
 /* ================= Responsive ================= */
 @media (max-width:1180px){
   .search-trigger{min-width:0}
@@ -481,6 +536,15 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
   .toast{bottom:6.2rem}
   .bar-row{grid-template-columns:minmax(80px,110px) 1fr 34px}
   .u-grid{grid-template-columns:1fr}
+  .req-head{grid-template-columns:1fr}
+  .req-logo,.req-tit{border-right:none;border-bottom:1px solid var(--line)}
+  .req-body{padding:1rem}
+  .req-top{grid-template-columns:1fr 1fr}
+  .req-top .span2,.req-top .span4{grid-column:1/-1}
+  .req-firmas{grid-template-columns:1fr}
+  .req-acciones{padding:1rem}
+  .req-acciones .hint{width:100%}
+  .req-acciones .btn{flex:1}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
@@ -506,6 +570,7 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
       <button class="nav-item" id="btnUsuarios" onclick="loadUsuarios()"><span>Usuarios</span></button>
       <button class="nav-item" id="btnImpresoras" onclick="loadImpresoras()"><span>Impresoras</span></button>
       <button class="nav-item" id="btnVigencias" onclick="loadVigencias()"><span>Vigencias</span></button>
+      <button class="nav-item" id="btnRequisiciones" onclick="loadRequisiciones()"><span>Requisiciones</span></button>
       <button class="nav-item" id="btnStats" onclick="loadDashboard()"><span>Estadísticas</span></button>
     </nav>
 
@@ -784,6 +849,8 @@ const I = {
   scan:     svg('<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M3 12h18"/>'),
   calendar: svg('<rect x="3" y="4.5" width="18" height="16" rx="1.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>'),
   alert:    svg('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>', 14),
+  doc:      svg('<path d="M14 2H6.5A1.5 1.5 0 0 0 5 3.5v17A1.5 1.5 0 0 0 6.5 22h11a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M14 2v5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h2.5"/>'),
+  download: svg('<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>', 16),
   printer:  svg('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="1.5"/><path d="M6 14h12v7H6z"/>'),
   chart:    svg('<path d="M4 20V11M12 20V4M20 20v-8"/>'),
   chevLeft: svg('<path d="M15 18l-6-6 6-6"/>', 14),
@@ -826,6 +893,7 @@ function recargarVista(){
   if(vistaActual === 'tareas') return refreshKanban();
   if(vistaActual === 'vigencias') return refreshVigencias();
   if(vistaActual === 'stats') return loadDashboard();
+  if(vistaActual === 'requisiciones') return reqTab === 'historial' ? cargarHistorialReq() : null;
 }
 
 /* Error ya mostrado al usuario: detiene la acción sin mostrar "Guardado" ni nada de éxito */
@@ -2047,11 +2115,271 @@ async function borrarTarea(id){
   }
 }
 
+/* ============ REQUISICIONES DE COMPRA ============ */
+let reqListas = null;          // listas del formato (php/requisiciones.php) + siguiente consecutivo
+let reqTab = 'nueva';
+let reqBorrador = null;        // lo escrito en el formulario, para no perderlo al cambiar de sección
+let reqLogo = null;            // logo en base64 para el PDF
+let reqBusqDebounce = null;
+
+function cargarScript(src){
+  return new Promise((ok, mal)=>{
+    if(document.querySelector(`script[src="${src}"]`)) return ok();
+    const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ()=>mal(new Error(src));
+    document.head.appendChild(s);
+  });
+}
+/* Carga la librería del PDF y el logo (desde el propio servidor, sin internet) */
+async function prepararPDF(){
+  try{
+    await cargarScript('js/jspdf.umd.min.js');
+    await cargarScript('js/requisicion-pdf.js');
+    if(!reqLogo){
+      const b = await (await fetch('img/logo-coomulpinort.jpg')).blob();
+      reqLogo = await new Promise(r=>{ const f = new FileReader(); f.onload = ()=>r(f.result); f.readAsDataURL(b); });
+    }
+    return true;
+  } catch(e){
+    toast('No se pudo cargar el generador de PDF (carpeta js/ o img/). No se guardó nada.', I.close);
+    return false;
+  }
+}
+
+async function loadRequisiciones(){
+  vistaActual = 'requisiciones';
+  activeUser = null; vigViewActiva = false; marcarNav('btnRequisiciones');
+  document.getElementById('rightPanel').innerHTML = `
+    <div class="view-fade">
+    ${encabezado({eyebrow:'Compras', titulo:'Requisiciones', sub:'Formato de requisición de compras MA-PC-FT-001. Llena las casillas y descarga el PDF; cada exportación toma el siguiente consecutivo.'})}
+    <div class="seg" role="tablist">
+      <button id="reqTabNueva" role="tab" onclick="cambiarTabReq('nueva')">${I.plus}<span>Nueva requisición</span></button>
+      <button id="reqTabHist" role="tab" onclick="cambiarTabReq('historial')">${I.calendar}<span>Historial</span><span class="eq-count" id="reqHistCount"></span></button>
+    </div>
+    <div id="reqContenido"></div>
+    </div>`;
+  irArriba();
+  reqListas = await api({action:'requisicion_listas'});
+  cambiarTabReq(reqTab);
+}
+
+function cambiarTabReq(tab){
+  if(reqTab === 'nueva' && document.getElementById('reqForm')) reqBorrador = leerFormReq();
+  reqTab = tab;
+  document.getElementById('reqTabNueva')?.classList.toggle('on', tab === 'nueva');
+  document.getElementById('reqTabHist')?.classList.toggle('on', tab === 'historial');
+  if(tab === 'nueva') pintarFormReq(); else pintarHistorialReq();
+}
+
+function opciones(lista, sel, conCodigo, vacio='Seleccionar...'){
+  return `<option value="">${vacio}</option>` + lista.map(o=>{
+    const v = typeof o === 'string' ? o : o.cod;
+    const t = typeof o === 'string' ? o : (conCodigo ? `${o.cod} — ${o.nombre}` : o.nombre);
+    return `<option value="${esc(v)}" ${String(sel??'')===String(v)?'selected':''}>${esc(t)}</option>`;
+  }).join('');
+}
+
+function pintarFormReq(){
+  const L = reqListas, b = reqBorrador || {};
+  const def = (k, lista) => b[k] ?? (lista.length === 1 ? (typeof lista[0]==='string' ? lista[0] : lista[0].cod) : '');
+  const filas = Array.from({length: L.max_items}, (_, i) => {
+    const it = (b.items || [])[i] || {};
+    return `<tr>
+      <td>${i+1}</td>
+      <td style="width:92px"><input type="number" min="0" step="any" inputmode="decimal" data-k="cantidad" value="${esc(it.cantidad ?? '')}" aria-label="Cantidad fila ${i+1}"></td>
+      <td style="width:130px"><select data-k="unidad" aria-label="Unidad fila ${i+1}">${opciones(L.unidades, it.unidad, false, '')}</select></td>
+      <td><textarea rows="1" data-k="articulo" maxlength="1000" aria-label="Artículo o servicio fila ${i+1}" placeholder="${i===0?'Ej: Monitor Samsung 22&quot; S3 Full HD HDMI VGA 120Hz':''}">${esc(it.articulo ?? '')}</textarea></td>
+      <td style="width:190px"><input data-k="proveedor" maxlength="200" value="${esc(it.proveedor ?? '')}" aria-label="Proveedor fila ${i+1}"></td>
+      <td style="width:200px"><select data-k="centro_trabajo" aria-label="Centro de trabajo fila ${i+1}">${opciones(L.centros_trabajo, it.centro_trabajo, false, '')}</select></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('reqContenido').innerHTML = `
+  <form class="card req-sheet" id="reqForm" novalidate onsubmit="event.preventDefault();exportarRequisicion()" oninput="reqCambio(event)" onchange="reqCambio(event)">
+    <div class="req-head">
+      <div class="req-logo"><img src="img/logo-coomulpinort.jpg" alt="Coomulpinort"></div>
+      <div class="req-tit"><small>PROCESO DE COMPRAS · COMPRAS Y CONTRATACIÓN DE SERVICIOS</small><b>FORMATO DE REQUISICIÓN DE COMPRAS</b></div>
+      <div class="req-meta"><span>CÓDIGO:</span><span>${esc(L.formato.codigo)}</span><span>VERSIÓN:</span><span>${esc(L.formato.version)}</span><span>FECHA:</span><span>${esc(L.formato.fecha)}</span><span>PÁGINA</span><span>1 de 1</span></div>
+    </div>
+    <div class="req-body">
+      <div class="req-top">
+        <div class="rf span4"><label>REQ N°</label><div class="req-code"><b id="reqCodigo"></b><small>Se arma solo: empresa · área · solicitante · consecutivo</small></div></div>
+        <div class="rf"><label for="reqFecha">Fecha</label><input id="reqFecha" readonly value="${esc(fmtFecha(L.hoy))}"></div>
+        <div class="rf"><label for="reqCons">Consecutivo</label><input id="reqCons" readonly value="${L.siguiente} (se asigna al exportar)"></div>
+        <div class="rf span2"><label for="reqPrioridad">Prioridad</label><select id="reqPrioridad" name="prioridad" required>${opciones(L.prioridades, b.prioridad)}</select></div>
+        <div class="rf span4"><label for="reqEmpresa">Empresa</label><select id="reqEmpresa" name="empresa_cod" required>${opciones(L.empresas, def('empresa_cod', L.empresas))}</select></div>
+        <div class="rf span2"><label for="reqArea">Área</label><select id="reqArea" name="area_cod" required>${opciones(L.areas, b.area_cod, true)}</select></div>
+        <div class="rf span2"></div>
+        <div class="rf span2"><label for="reqSol">Solicitante</label><select id="reqSol" name="solicitante_cod" required onchange="reqSolicitanteCambio()">${opciones(L.solicitantes, b.solicitante_cod, true)}</select></div>
+        <div class="rf span2"><label for="reqAut">Autorizado por</label><select id="reqAut" name="autorizado_por" required>${opciones(L.autorizado_por, def('autorizado_por', L.autorizado_por))}</select></div>
+      </div>
+
+      <div class="req-items-wrap">
+        <table class="req-items" id="reqItems">
+          <thead><tr><th>Ítem</th><th>Cantidad</th><th>Unidad</th><th>Artículo o servicio</th><th>Proveedor (o sugerido)</th><th>Centro de trabajo</th></tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
+      <p class="req-nota">En el campo de artículo o servicio, indicar de manera clara, las características del producto o servicio, modelo, color, material de elaboración y cualquier otra especificación importante para solicitar una correcta cotización y proceso de compra.</p>
+
+      <div class="rf"><label for="reqObs">Observaciones</label><textarea id="reqObs" name="observaciones" rows="2" maxlength="2000" placeholder="Información adicional para la cotización (opcional)">${esc(b.observaciones ?? '')}</textarea></div>
+
+      <div class="req-firmas">
+        <div class="req-firma">
+          <h4>Solicitante</h4>
+          <div class="rf"><label for="reqSolNombre">Nombre</label><input id="reqSolNombre" readonly></div>
+          <div class="rf"><label for="reqCedula">Cédula</label><input id="reqCedula" name="sol_cedula" inputmode="numeric" maxlength="30" value="${esc(b.sol_cedula ?? '')}"></div>
+          <div class="rf"><label for="reqCargo">Cargo</label><input id="reqCargo" name="sol_cargo" maxlength="150" value="${esc(b.sol_cargo ?? '')}"></div>
+        </div>
+        <div class="req-firma vacia"><h4>Revisó</h4><p>Firma a mano en el documento impreso</p></div>
+        <div class="req-firma vacia"><h4>Aprobó</h4><p>Firma a mano en el documento impreso</p></div>
+      </div>
+    </div>
+    <div class="req-acciones">
+      <span class="hint">Al exportar se guarda en el historial con el consecutivo N.° ${L.siguiente} o el siguiente disponible.</span>
+      <button type="button" class="btn btn-ghost" onclick="limpiarReq()">Limpiar</button>
+      <button type="submit" class="btn btn-primary" id="btnExportarReq">${I.download}<span>Guardar y descargar PDF</span></button>
+    </div>
+  </form>`;
+  document.querySelectorAll('#reqItems textarea').forEach(autoAltura);
+  marcarFilasReq();
+  actualizarCodigoReq();
+}
+
+function autoAltura(t){ t.style.height = 'auto'; t.style.height = Math.max(34, t.scrollHeight) + 'px'; }
+function marcarFilasReq(){
+  document.querySelectorAll('#reqItems tbody tr').forEach(tr=>{
+    tr.classList.toggle('lleno', [...tr.querySelectorAll('[data-k]')].some(e=>e.value.trim() !== ''));
+  });
+}
+function reqCambio(e){
+  if(e.target.tagName === 'TEXTAREA' && e.target.closest('#reqItems')) autoAltura(e.target);
+  if(e.target.closest('#reqItems')) marcarFilasReq();
+  actualizarCodigoReq();
+  reqBorrador = leerFormReq();
+}
+function reqSolicitanteCambio(){
+  const cod = document.getElementById('reqSol').value;
+  const prev = reqListas.previos[cod];
+  // Rellena cédula y cargo con lo último que usó ese solicitante (si los campos están vacíos)
+  const ced = document.getElementById('reqCedula'), car = document.getElementById('reqCargo');
+  if(prev){ if(!ced.value) ced.value = prev.cedula || ''; if(!car.value) car.value = prev.cargo || ''; }
+}
+function actualizarCodigoReq(){
+  const v = id => document.getElementById(id)?.value || '';
+  const part = (x, ph) => x ? esc(x) : `<i>${ph}</i>`;
+  const el = document.getElementById('reqCodigo');
+  if(el) el.innerHTML = `${part(v('reqEmpresa'),'EMP')}-${part(v('reqArea'),'ÁREA')}-${part(v('reqSol'),'SOL')}-<i>${reqListas.siguiente}</i>`;
+  const sol = reqListas.solicitantes.find(s=>s.cod === v('reqSol'));
+  const nom = document.getElementById('reqSolNombre'); if(nom) nom.value = sol ? sol.nombre : '';
+}
+function leerFormReq(){
+  const f = document.getElementById('reqForm'); if(!f) return reqBorrador;
+  const d = {};
+  ['prioridad','empresa_cod','area_cod','solicitante_cod','autorizado_por','observaciones','sol_cedula','sol_cargo'].forEach(k=>{ d[k] = f.elements[k].value; });
+  d.items = [...document.querySelectorAll('#reqItems tbody tr')].map(tr=>{
+    const o = {}; tr.querySelectorAll('[data-k]').forEach(e=>{ o[e.dataset.k] = e.value; }); return o;
+  });
+  return d;
+}
+function limpiarReq(){
+  if(reqBorrador && !confirm('¿Borrar todo lo escrito en el formulario?')) return;
+  reqBorrador = null; pintarFormReq();
+}
+
+/* Revisión en la página (el servidor vuelve a revisar todo) */
+function validarReqLocal(d){
+  if(!d.prioridad) return ['reqPrioridad','Selecciona la prioridad.'];
+  if(!d.empresa_cod) return ['reqEmpresa','Selecciona la empresa.'];
+  if(!d.area_cod) return ['reqArea','Selecciona el área.'];
+  if(!d.solicitante_cod) return ['reqSol','Selecciona el solicitante.'];
+  if(!d.autorizado_por) return ['reqAut','Selecciona quién autoriza.'];
+  if(d.sol_cedula && !/^[0-9.\s-]+$/.test(d.sol_cedula)) return ['reqCedula','La cédula solo puede tener números.'];
+  let hay = false;
+  for(let i = 0; i < d.items.length; i++){
+    const it = d.items[i], fila = document.querySelectorAll('#reqItems tbody tr')[i];
+    const algo = Object.values(it).some(v=>String(v).trim() !== '');
+    if(!algo) continue;
+    hay = true;
+    if(!String(it.articulo).trim()) return [fila.querySelector('[data-k=articulo]'), `Fila ${i+1}: escribe el artículo o servicio.`];
+    if(!(Number(String(it.cantidad).replace(',','.')) > 0)) return [fila.querySelector('[data-k=cantidad]'), `Fila ${i+1}: la cantidad debe ser mayor que 0.`];
+  }
+  if(!hay) return [document.querySelector('#reqItems [data-k=articulo]'), 'Agrega al menos un artículo o servicio.'];
+  return null;
+}
+
+async function exportarRequisicion(){
+  const d = leerFormReq();
+  const err = validarReqLocal(d);
+  if(err){
+    const el = typeof err[0] === 'string' ? document.getElementById(err[0]) : err[0];
+    toast(err[1], I.close); if(el){ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }
+    return;
+  }
+  if(!confirm(`Se guardará la requisición con el siguiente consecutivo (N.° ${reqListas.siguiente}, o el que siga si alguien exporta al mismo tiempo) y se descargará el PDF.\n\nDespués no se puede modificar. ¿Continuar?`)) return;
+  const btn = document.getElementById('btnExportarReq');
+  btn.disabled = true; btn.querySelector('span').textContent = 'Guardando...';
+  try{
+    if(!(await prepararPDF())) return;
+    const res = await api({action:'crear_requisicion'}, d);
+    const r = res.requisicion;
+    RequisicionPDF.descargar(r, reqListas.formato, reqLogo);
+    toast(`Requisición ${r.codigo} guardada y descargada`);
+    reqBorrador = null;
+    reqListas = await api({action:'requisicion_listas'});
+    pintarFormReq();
+    irArriba();
+  } finally {
+    const b2 = document.getElementById('btnExportarReq');
+    if(b2){ b2.disabled = false; b2.querySelector('span').textContent = 'Guardar y descargar PDF'; }
+  }
+}
+
+/* ---- Historial ---- */
+function pintarHistorialReq(){
+  document.getElementById('reqContenido').innerHTML = `
+    <div class="toolbar">
+      <div class="field-ic"><span class="sic">${I.search}</span><input class="si" id="reqBuscar" type="text" placeholder="Buscar por código, consecutivo, solicitante, área, artículo o proveedor..." aria-label="Buscar requisiciones" oninput="clearTimeout(reqBusqDebounce);reqBusqDebounce=setTimeout(cargarHistorialReq,200)"></div>
+    </div>
+    <div class="vg-table-wrap" id="reqTabla"><div class="empty-state" style="border:none">Cargando...</div></div>`;
+  cargarHistorialReq();
+}
+async function cargarHistorialReq(){
+  const box = document.getElementById('reqTabla'); if(!box) return;
+  const q = document.getElementById('reqBuscar')?.value.trim() || '';
+  const d = await api({action:'requisiciones', q});
+  const rows = d.requisiciones || [];
+  const cnt = document.getElementById('reqHistCount'); if(cnt && !q) cnt.textContent = rows.length;
+  if(!rows.length){
+    box.innerHTML = `<div class="empty-state" style="border:none;padding:2rem">${q ? 'Ninguna requisición coincide con la búsqueda.' : 'Todavía no hay requisiciones. Llena el formulario en “Nueva requisición” y expórtala.'}</div>`;
+    return;
+  }
+  box.innerHTML = `<table class="vgt">
+    <thead><tr><th>N.°</th><th>REQ N°</th><th>Fecha</th><th>Solicitante</th><th>Artículos</th><th>Prioridad</th><th></th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td><span class="req-n">${r.consecutivo}</span></td>
+      <td><div class="vg-name" style="font-family:var(--mono);font-weight:500">${esc(r.codigo)}</div><div class="vg-sub">${esc(r.area_nombre)}</div></td>
+      <td class="vg-date">${fmtFecha(r.fecha)}</td>
+      <td><div class="vg-name">${esc(r.solicitante_nombre)}</div></td>
+      <td style="max-width:320px"><div class="vg-name" style="font-weight:600">${esc(r.primer_item || '')}</div><div class="vg-sub">${r.total_items} ítem${r.total_items==1?'':'s'}</div></td>
+      <td><span class="req-prio ${esc(r.prioridad)}">${esc(r.prioridad)}</span></td>
+      <td><div class="vg-actions"><button class="btn btn-ghost btn-sm" onclick="descargarReq(${r.id}, this)">${I.download}<span>PDF</span></button></div></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+async function descargarReq(id, btn){
+  btn.disabled = true;
+  try{
+    if(!(await prepararPDF())) return;
+    const d = await api({action:'requisicion', id});
+    RequisicionPDF.descargar(d.requisicion, reqListas.formato, reqLogo);
+  } finally { btn.disabled = false; }
+}
+
 /* ============ INIT ============ */
 document.getElementById('btnTareas').innerHTML = I.kanban + '<span>Tareas</span>';
 document.getElementById('btnUsuarios').innerHTML = I.users + '<span>Usuarios</span>';
 document.getElementById('btnImpresoras').innerHTML = I.printer + '<span>Impresoras</span>';
 document.getElementById('btnVigencias').innerHTML = I.calendar + '<span>Vigencias</span>';
+document.getElementById('btnRequisiciones').innerHTML = I.doc + '<span>Requisiciones</span>';
 document.getElementById('btnStats').innerHTML = I.chart + '<span>Estadísticas</span>';
 document.getElementById('searchTopIcon').innerHTML = I.search;
 document.getElementById('btnBuscarM').innerHTML = I.search;
