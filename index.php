@@ -315,6 +315,17 @@ button,input,select,textarea{font-family:inherit;color:inherit}
 /* ================= Impresoras ================= */
 .imp-bar{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:.4rem;margin-bottom:1rem}
 .imp-bar .select-pill{flex:1;min-width:200px;border-color:transparent;background-color:var(--soft)}
+.auto-box{display:flex;align-items:center;gap:.45rem;margin-left:auto;flex-wrap:wrap}
+.auto-l{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;font-weight:700;color:var(--ink-2);padding-left:.4rem}
+.auto-l .ic{color:var(--c-deep)}
+.auto-box .select-pill{height:38px;font-size:.82rem;min-width:170px}
+.auto-custom{align-items:center;gap:.35rem}
+.auto-custom input{width:76px;height:38px;border:1px solid var(--line);border-radius:999px;background:var(--card);padding:0 .8rem;font-size:.84rem;font-weight:600;outline:none}
+.auto-custom input:focus{border-color:var(--c-lime);box-shadow:0 0 0 4px rgba(124,130,232,.2)}
+.auto-u{font-size:.78rem;color:var(--mute);font-weight:600}
+.imp-next{display:flex;align-items:center;gap:.45rem;font-size:.8rem;color:var(--ink-2);margin:-.4rem 0 1rem .4rem}
+.imp-next:empty{display:none}
+.imp-next .ic{color:var(--c-deep);width:15px;height:15px}
 .switch{display:flex;align-items:center;gap:.55rem;font-size:.82rem;font-weight:600;color:var(--ink-2);margin-left:auto;padding:0 .7rem;cursor:pointer;user-select:none}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
 .switch .track{width:38px;height:22px;border-radius:999px;background:var(--line-2);position:relative;transition:background .2s;flex-shrink:0}
@@ -459,6 +470,10 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
   .imp-grid{grid-template-columns:1fr}
   .imp-bar{border-radius:var(--r-lg)}
   .switch{margin-left:0}
+  .auto-box{margin-left:0;width:100%}
+  .auto-box .select-pill{flex:1;min-width:0}
+  .auto-custom{width:100%}
+  .auto-custom input{flex:1}
   .form-grid,.form-grid.c3{grid-template-columns:1fr}
   .modal-bg{align-items:flex-end;padding:0}
   .modal,.modal-bg.drawer .modal{max-width:none;height:auto;max-height:92vh;border-radius:var(--r-xl) var(--r-xl) 0 0;animation:pop .3s var(--ease)}
@@ -726,25 +741,6 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalVigencia')">Cancelar</button>
       <button class="btn btn-primary" id="btnGuardarVigencia" onclick="guardarVigencia()"><span>Guardar</span></button>
-    </div>
-  </div>
-</div>
-
-<!-- Impresora -->
-<div class="modal-bg" id="modalImpresora" style="display:none" onclick="if(event.target===this)closeModal('modalImpresora')">
-  <div class="modal" style="max-width:460px" role="dialog" aria-modal="true" aria-labelledby="impModalTitle">
-    <div class="modal-head">
-      <h3 id="impModalTitle"><span>Agregar impresora</span></h3>
-      <div class="modal-sub">Se consulta su página web de contadores desde la red local.</div>
-    </div>
-    <div class="modal-body">
-      <div class="fg"><label for="impNombre">Nombre *</label><input id="impNombre" maxlength="150" placeholder="Ej: Ricoh Administración"></div>
-      <div class="fg"><label for="impIp">Dirección IP *</label><input id="impIp" maxlength="64" placeholder="Ej: 192.168.2.179" style="font-family:var(--mono)"></div>
-      <div class="fg"><label for="impUbic">Ubicación</label><input id="impUbic" maxlength="150" placeholder="Ej: Piso 2 (opcional)"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modalImpresora')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarImpresora()"><span>Guardar</span></button>
     </div>
   </div>
 </div>
@@ -1391,10 +1387,25 @@ async function loadImpresoras(){
 
     <div class="imp-bar">
       <select id="impSelect" class="select-pill" aria-label="Impresora" onchange="impSel=Number(this.value);impMostrarVacio();cargarLecturasImp();"></select>
-      <button class="btn btn-ghost btn-sm" onclick="abrirModalImpresora()">${I.plus}<span>Agregar</span></button>
-      <button class="btn btn-danger btn-ic btn-sm" onclick="eliminarImpresora()" title="Eliminar impresora" aria-label="Eliminar impresora">${I.trash}</button>
-      <label class="switch"><input type="checkbox" id="impAuto" onchange="impToggleAuto(this.checked)"><span class="track"></span><span>Actualizar cada minuto</span></label>
+      <div class="auto-box">
+        <span class="auto-l">${I.refresh}<span>Actualizar</span></span>
+        <select id="impAuto" class="select-pill" aria-label="Frecuencia de actualización automática" onchange="impCambiarIntervalo(this.value)">
+          <option value="0">Desactivado</option>
+          <option value="20">Cada 20 minutos</option>
+          <option value="30">Cada 30 minutos</option>
+          <option value="40">Cada 40 minutos</option>
+          <option value="60">Cada 1 hora</option>
+          <option value="180">Cada 3 horas</option>
+          <option value="custom">Personalizado...</option>
+        </select>
+        <span class="auto-custom" id="impAutoCustom" style="display:none">
+          <input type="number" id="impAutoMin" min="1" max="1440" step="1" inputmode="numeric" aria-label="Minutos" placeholder="min">
+          <span class="auto-u">min</span>
+          <button class="btn btn-primary btn-sm" onclick="impAplicarPersonalizado()">Aplicar</button>
+        </span>
+      </div>
     </div>
+    <div class="imp-next" id="impNext"></div>
     <div id="impMsg"></div>
     <div id="impActual"></div>
 
@@ -1413,6 +1424,8 @@ async function loadImpresoras(){
   sel.innerHTML = impLista.map(i=>`<option value="${i.id}" ${i.id===impSel?'selected':''}>${esc(i.nombre)} (${esc(i.ip)})</option>`).join('')
                   || '<option value="">Sin impresoras</option>';
   cargarTotalesImp();
+  impToggleAuto(impLeerPreferencia());
+  impSincronizarSelector();
   await cargarLecturasImp();
 }
 
@@ -1423,7 +1436,7 @@ function impMostrarVacio(){
 async function cargarLecturasImp(){
   const hist = document.getElementById('impHistorial');
   if(!hist) return;
-  if(!impSel){ hist.innerHTML = '<div class="empty-state" style="border:none">Agrega una impresora para empezar.</div>'; document.getElementById('impActual').innerHTML=''; return; }
+  if(!impSel){ hist.innerHTML = '<div class="empty-state" style="border:none">No hay impresoras configuradas. Se agregan en el archivo php/impresoras.php.</div>'; document.getElementById('impActual').innerHTML=''; return; }
   const d = await api({action:'lecturas_impresora', id: impSel});
   const rows = d.lecturas || [];
   if(!rows.length){
@@ -1506,40 +1519,86 @@ async function consultarImpresora(silencioso=false){
   }
 }
 
-function impToggleAuto(on){
+/* ---- Actualización automática: intervalo en minutos (0 = desactivado) ---- */
+const IMP_PRESETS = [20, 30, 40, 60, 180];
+const IMP_MIN = 1, IMP_MAX = 1440;
+let impMinutos = 0;
+let impProxima = null;
+
+function impLeerPreferencia(){
+  try { const v = Number(localStorage.getItem('invcmp_imp_auto_min')); return Number.isFinite(v) && v >= IMP_MIN && v <= IMP_MAX ? v : 0; }
+  catch(e){ return 0; }
+}
+function impGuardarPreferencia(min){
+  try { localStorage.setItem('invcmp_imp_auto_min', String(min)); } catch(e){}
+}
+function impTextoIntervalo(min){
+  if(min % 60 === 0){ const h = min/60; return `cada ${h} hora${h===1?'':'s'}`; }
+  if(min > 60){ return `cada ${Math.floor(min/60)} h ${min%60} min`; }
+  return `cada ${min} minuto${min===1?'':'s'}`;
+}
+function impMostrarProxima(){
+  const el = document.getElementById('impNext');
+  if(!el) return;
+  if(!impMinutos || !impProxima){ el.innerHTML = ''; return; }
+  const hh = impProxima.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+  el.innerHTML = `${I.refresh}<span>Actualización automática ${impTextoIntervalo(impMinutos)} · próxima consulta: <b>${hh}</b> · Funciona mientras esta página esté abierta en Impresoras</span>`;
+}
+function impSincronizarSelector(){
+  const sel = document.getElementById('impAuto');
+  if(!sel) return;
+  const esPreset = impMinutos === 0 || IMP_PRESETS.includes(impMinutos);
+  sel.value = esPreset ? String(impMinutos) : 'custom';
+  const custom = document.getElementById('impAutoCustom');
+  custom.style.display = esPreset ? 'none' : 'inline-flex';
+  if(!esPreset) document.getElementById('impAutoMin').value = impMinutos;
+}
+
+/* Arranca o detiene el temporizador con el intervalo indicado (minutos) */
+function impToggleAuto(min){
   if(impTimer){ clearInterval(impTimer); impTimer = null; }
-  if(!on) return;
+  impMinutos = Number(min) || 0;
+  impProxima = null;
+  if(impMinutos > 0){
+    const ms = impMinutos * 60000;
+    impProxima = new Date(Date.now() + ms);
+    impTimer = setInterval(()=>{
+      if(!document.getElementById('impAuto')){ clearInterval(impTimer); impTimer = null; return; } // se salió de la vista
+      impProxima = new Date(Date.now() + ms);
+      impMostrarProxima();
+      consultarImpresora(true);
+    }, ms);
+  }
+  impMostrarProxima();
+}
+
+function impCambiarIntervalo(valor){
+  const custom = document.getElementById('impAutoCustom');
+  if(valor === 'custom'){
+    custom.style.display = 'inline-flex';
+    const inp = document.getElementById('impAutoMin');
+    if(!inp.value) inp.value = impMinutos || 15;
+    inp.focus(); inp.select();
+    return;
+  }
+  custom.style.display = 'none';
+  const min = Number(valor) || 0;
+  impGuardarPreferencia(min);
+  impToggleAuto(min);
+  if(min) consultarImpresora(true);   // primera lectura de inmediato, como antes
+  toast(min ? `Actualización automática ${impTextoIntervalo(min)}` : 'Actualización automática desactivada', min ? I.check : I.close);
+}
+
+function impAplicarPersonalizado(){
+  const min = Math.round(Number(document.getElementById('impAutoMin').value));
+  if(!Number.isFinite(min) || min < IMP_MIN || min > IMP_MAX){
+    toast(`Escribe un número de minutos entre ${IMP_MIN} y ${IMP_MAX}`, I.close); return;
+  }
+  impGuardarPreferencia(min);
+  impToggleAuto(min);
+  impSincronizarSelector();
   consultarImpresora(true);
-  impTimer = setInterval(()=>{
-    if(!document.getElementById('impAuto')){ clearInterval(impTimer); impTimer = null; return; } // se salió de la vista
-    consultarImpresora(true);
-  }, 60000);
-}
-
-function abrirModalImpresora(){
-  ['impNombre','impIp','impUbic'].forEach(k=>document.getElementById(k).value='');
-  document.getElementById('impModalTitle').innerHTML = I.printer + '<span>Agregar impresora</span>';
-  document.getElementById('modalImpresora').style.display = 'flex';
-}
-
-async function guardarImpresora(){
-  const body = { nombre: document.getElementById('impNombre').value, ip: document.getElementById('impIp').value.trim(), ubicacion: document.getElementById('impUbic').value };
-  if(!body.nombre.trim()){ toast('El nombre es obligatorio', I.close); return; }
-  const res = await api({action:'crear_impresora'}, body);
-  if(res && res.error){ toast(res.error, I.close); return; }
-  closeModal('modalImpresora');
-  impSel = res.id;
-  toast('Impresora agregada');
-  loadImpresoras();
-}
-
-async function eliminarImpresora(){
-  if(!impSel) return;
-  if(!confirm('¿Eliminar esta impresora y todo su historial de lecturas?')) return;
-  await api({action:'eliminar_impresora'}, {id: impSel});
-  impSel = null;
-  toast('Impresora eliminada', I.trash);
-  loadImpresoras();
+  toast(`Actualización automática ${impTextoIntervalo(min)}`);
 }
 
 /* ============ VIGENCIAS ============ */

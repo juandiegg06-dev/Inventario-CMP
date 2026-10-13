@@ -218,25 +218,41 @@ SQL);
             $pdo->exec("ALTER TABLE impresora_lecturas ADD COLUMN `$col` int(11) DEFAULT NULL");
         }
     }
-    // Alta inicial (una sola vez): impresoras de la empresa con su nombre
-    $pdo->exec("CREATE TABLE IF NOT EXISTS app_migraciones (clave varchar(80) NOT NULL, aplicada_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (clave)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    $hecha = $pdo->prepare("SELECT 1 FROM app_migraciones WHERE clave = ?");
-    $hecha->execute(['impresoras_nombres_v1']);
-    if (!$hecha->fetchColumn()) {
-        $iniciales = [
-            ['192.168.2.179', 'RICOH MP C6004ex (TESORERIA)'],
-            ['192.168.2.35',  'RICOH IM C3500 (RECEPCION)'],
-        ];
-        foreach ($iniciales as [$ip, $nombre]) {
-            $ex = $pdo->prepare("SELECT id FROM impresoras WHERE ip = ? ORDER BY id LIMIT 1");
-            $ex->execute([$ip]);
-            $id = $ex->fetchColumn();
-            if ($id) $pdo->prepare("UPDATE impresoras SET nombre = ? WHERE id = ?")->execute([$nombre, $id]);
-            else $pdo->prepare("INSERT INTO impresoras (nombre, ip) VALUES (?, ?)")->execute([$nombre, $ip]);
-        }
-        $pdo->prepare("INSERT INTO app_migraciones (clave) VALUES (?)")->execute(['impresoras_nombres_v1']);
+    // Sincroniza con la lista definida en php/impresoras.php (única fuente de impresoras)
+    foreach (impresorasConfig() as $c) {
+        $ex = $pdo->prepare("SELECT id FROM impresoras WHERE ip = ? ORDER BY id LIMIT 1");
+        $ex->execute([$c['ip']]);
+        $id = $ex->fetchColumn();
+        if ($id) $pdo->prepare("UPDATE impresoras SET nombre = ?, ubicacion = ? WHERE id = ?")->execute([$c['nombre'], $c['ubicacion'], $id]);
+        else $pdo->prepare("INSERT INTO impresoras (nombre, ip, ubicacion) VALUES (?, ?, ?)")->execute([$c['nombre'], $c['ip'], $c['ubicacion']]);
     }
     $listo = true;
+}
+
+/** Impresoras definidas en php/impresoras.php (solo IPs locales válidas, sin repetidas). */
+function impresorasConfig(): array {
+    static $lista = null;
+    if ($lista !== null) return $lista;
+    $lista = [];
+    $vistas = [];
+    $archivo = __DIR__ . '/impresoras.php';
+    $datos = is_file($archivo) ? (require $archivo) : [];
+    foreach ((array)$datos as $c) {
+        $ip = trim((string)($c['ip'] ?? ''));
+        $nombre = trim((string)($c['nombre'] ?? ''));
+        if ($nombre === '' || !ipLocalValida($ip) || isset($vistas[$ip])) continue;
+        $vistas[$ip] = true;
+        $ubic = trim((string)($c['ubicacion'] ?? ''));
+        $lista[] = ['ip' => $ip, 'nombre' => mb_substr($nombre, 0, 150), 'ubicacion' => $ubic === '' ? null : mb_substr($ubic, 0, 150)];
+    }
+    return $lista;
+}
+
+/** Condición SQL para mostrar solo las impresoras de la lista ([sql, parámetros]). */
+function filtroImpresoras(string $col = 'i.ip'): array {
+    $ips = array_column(impresorasConfig(), 'ip');
+    if (!$ips) return ['0 = 1', []];
+    return ["$col IN (" . implode(',', array_fill(0, count($ips), '?')) . ")", $ips];
 }
 
 /** Solo se permiten IPv4 de red local (evita que la API se use para consultar sitios externos). */
@@ -396,10 +412,14 @@ function consultarImpresora(string $ip): array {
 function totalesImpresoras(PDO $pdo): array {
     $campos = ['copia_color','copia_bn','copia_color_pers','copia_dos_colores','impresion_color','impresion_bn',
                'impresion_color_pers','impresion_dos_colores','escaneo_color','escaneo_bn','contador_total'];
-    $rows = $pdo->query("SELECT i.id, i.nombre, i.ip, l.fecha_hora, " . implode(', ', array_map(fn($c) => "l.$c", $campos)) . "
+    [$filtro, $ips] = filtroImpresoras();
+    $st = $pdo->prepare("SELECT i.id, i.nombre, i.ip, l.fecha_hora, " . implode(', ', array_map(fn($c) => "l.$c", $campos)) . "
         FROM impresoras i
         LEFT JOIN impresora_lecturas l ON l.id = (SELECT x.id FROM impresora_lecturas x WHERE x.impresora_id = i.id ORDER BY x.fecha_hora DESC, x.id DESC LIMIT 1)
-        ORDER BY i.nombre")->fetchAll();
+        WHERE $filtro
+        ORDER BY i.nombre");
+    $st->execute($ips);
+    $rows = $st->fetchAll();
     $suma = array_fill_keys($campos, 0);
     $conLectura = 0;
     foreach ($rows as $r) {
@@ -862,31 +882,19 @@ switch ($action) {
     case 'impresoras':
         $pdo = getDB();
         asegurarTablasImpresoras($pdo);
-        $rows = $pdo->query("SELECT i.id, i.nombre, i.ip, i.ubicacion,
+        [$filtro, $ips] = filtroImpresoras();
+        $st = $pdo->prepare("SELECT i.id, i.nombre, i.ip, i.ubicacion,
             (SELECT MAX(l.fecha_hora) FROM impresora_lecturas l WHERE l.impresora_id = i.id) AS ultima_lectura
-            FROM impresoras i ORDER BY i.nombre")->fetchAll();
+            FROM impresoras i WHERE $filtro ORDER BY i.nombre");
+        $st->execute($ips);
+        $rows = $st->fetchAll();
         echo json_encode(['impresoras' => $rows]);
         break;
 
+    // Las impresoras solo se agregan o quitan editando php/impresoras.php
     case 'crear_impresora':
-        if ($method !== 'POST') { http_response_code(405); break; }
-        $pdo = getDB();
-        asegurarTablasImpresoras($pdo);
-        $nombre = textoOpcional($body['nombre'] ?? '', 150);
-        $ip = trim((string)($body['ip'] ?? ''));
-        if ($nombre === null) { responderError(400, 'El nombre es obligatorio.'); break; }
-        if (!ipLocalValida($ip)) { responderError(400, 'Escribe una IP de red local válida (ej. 192.168.2.179).'); break; }
-        $pdo->prepare("INSERT INTO impresoras (nombre, ip, ubicacion) VALUES (?,?,?)")
-            ->execute([$nombre, $ip, textoOpcional($body['ubicacion'] ?? '', 150)]);
-        echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
-        break;
-
     case 'eliminar_impresora':
-        if ($method !== 'POST') { http_response_code(405); break; }
-        $pdo = getDB();
-        asegurarTablasImpresoras($pdo);
-        $pdo->prepare("DELETE FROM impresoras WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
-        echo json_encode(['ok' => true]);
+        responderError(403, 'Las impresoras se administran desde el archivo php/impresoras.php.');
         break;
 
     // Consulta la impresora en este momento y guarda la lectura
@@ -894,8 +902,9 @@ switch ($action) {
         if ($method !== 'POST') { http_response_code(405); break; }
         $pdo = getDB();
         asegurarTablasImpresoras($pdo);
-        $st = $pdo->prepare("SELECT id, ip FROM impresoras WHERE id = ?");
-        $st->execute([(int)($body['id'] ?? 0)]);
+        [$filtro, $ips] = filtroImpresoras('ip');
+        $st = $pdo->prepare("SELECT id, ip FROM impresoras WHERE id = ? AND $filtro");
+        $st->execute(array_merge([(int)($body['id'] ?? 0)], $ips));
         $imp = $st->fetch();
         if (!$imp) { responderError(404, 'Impresora no encontrada.'); break; }
         [$r, $err, $txt] = consultarImpresora($imp['ip']);

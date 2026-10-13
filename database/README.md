@@ -26,3 +26,7 @@ Estados: vigente, por vencer (30 días o menos) y vencida. Al eliminar una vigen
 ## Impresoras
 
 Tablas `impresoras` y `impresora_lecturas` (se crean solas; `impresoras.sql` para crearlas a mano). La página consulta el contador de la impresora desde el servidor local (PHP) y guarda cada lectura con fecha y hora: copia, impresión y escaneado, en color y B/N. Solo acepta IPs de red local.
+
+Las impresoras **no se agregan ni se eliminan desde la página**: se definen en `php/impresoras.php` (IP, nombre y ubicación). Al abrir la página, la tabla `impresoras` se sincroniza con esa lista. Si quitas una impresora del archivo, deja de mostrarse pero su historial de lecturas se conserva.
+
+La actualización automática de contadores (20, 30, 40 min, 1 h, 3 h o un intervalo personalizado de 1 a 1440 minutos) se ejecuta desde el navegador, así que solo funciona mientras la página está abierta en la sección Impresoras.
