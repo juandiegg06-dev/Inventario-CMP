@@ -118,6 +118,57 @@ function textoOpcional($v, int $max): ?string {
     return mb_substr($v, 0, $max);
 }
 
+// ---------------------------------------------------------------------------
+// Validaciones de equipos, software y tareas
+// ---------------------------------------------------------------------------
+const COMPONENTES_VALIDOS = ['Equipo de computo', 'Mouse', 'Teclado', 'Monitor', 'Otro'];
+const COLORES_TAREA = ['verde', 'amarillo', 'rojo', 'azul', 'morado'];
+const ESTADOS_TAREA = ['pendiente', 'en_proceso', 'completada'];
+/** Seriales "de relleno" que no cuentan como repetidos. */
+const SERIALES_GENERICOS = ['', 'N/A', 'NA', 'N.A', '-', '--', 'S/N', 'SN', 'SIN SERIAL', 'NO TIENE', '0',
+    // valores de relleno que traen algunas placas base de fábrica
+    'DEFAULT STRING', 'TO BE FILLED BY O.E.M.', 'SYSTEM SERIAL NUMBER', 'NONE', 'NOT APPLICABLE', '0123456789'];
+
+/** Largo máximo de cada columna editable de `equipos`. */
+const EQUIPO_LARGOS = [
+    'sede'=>100,'area'=>100,'responsable'=>150,'componente'=>100,'tipo_equipo'=>100,'usuario_actual'=>150,
+    'nombre_completo'=>200,'grupo_usuario'=>150,'marca'=>100,'modelo'=>150,'serial'=>150,'procesador'=>250,
+    'disco_total'=>50,'tipo_disco'=>50,'disco_usado'=>50,'tipo_ram'=>50,'ram_total'=>50,'ram_usada'=>50,
+    'sistema_op'=>150,'ip_local'=>50,'conexion'=>50,'observaciones'=>65535,'office'=>200,
+];
+
+/** Equipo existente y fuera de la papelera, o null. */
+function equipoActivo(PDO $pdo, int $id): ?array {
+    if ($id <= 0) return null;
+    $st = $pdo->prepare("SELECT * FROM equipos WHERE id = ? AND deleted_at IS NULL");
+    $st->execute([$id]);
+    return $st->fetch() ?: null;
+}
+
+/** Normaliza un valor de texto de equipo: recorta, vacío => null, respeta el largo de la columna. */
+function valorEquipo(string $col, $v): ?string {
+    if ($v === null || is_array($v)) return null;
+    $v = trim((string)$v);
+    if ($v === '') return null;
+    return mb_substr($v, 0, EQUIPO_LARGOS[$col] ?? 255);
+}
+
+/**
+ * Comprueba que el serial de un equipo de cómputo no esté ya en otro equipo de cómputo activo.
+ * Devuelve el mensaje de error o null.
+ */
+function serialRepetido(PDO $pdo, ?string $serial, ?string $componente, int $exceptoId = 0): ?string {
+    if ($componente !== 'Equipo de computo' || $serial === null) return null;
+    $norm = mb_strtoupper(trim($serial));
+    if (in_array($norm, SERIALES_GENERICOS, true)) return null;
+    $st = $pdo->prepare("SELECT responsable FROM equipos
+        WHERE UPPER(TRIM(serial)) = ? AND componente = 'Equipo de computo' AND deleted_at IS NULL AND id <> ? LIMIT 1");
+    $st->execute([$norm, $exceptoId]);
+    $otro = $st->fetchColumn();
+    if ($otro === false) return null;
+    return "Ya existe otro equipo de cómputo con el serial $serial" . ($otro ? " (asignado a $otro)." : '.');
+}
+
 /** Valida y normaliza el cuerpo de una vigencia. Devuelve [datos, error]. */
 function validarVigencia(PDO $pdo, array $b): array {
     $nombre = textoOpcional($b['nombre'] ?? '', 200);
@@ -438,6 +489,14 @@ if (in_array($method, ['POST','PUT'])) {
     $body = json_decode($raw, true) ?? [];
 }
 
+// Solo estas acciones son de consulta; todas las demás modifican datos y deben llegar por POST
+const ACCIONES_LECTURA = ['responsables','responsable','get_equipo','buscar_equipos','papelera','tareas','vigencias',
+    'get_vigencia','impresoras','impresoras_totales','lecturas_impresora','stats'];
+if ($action !== '' && !in_array($action, ACCIONES_LECTURA, true) && $method !== 'POST') {
+    responderError(405, 'Esta acción solo acepta peticiones POST.');
+    exit;
+}
+
 switch ($action) {
     case 'responsables':
         $q   = trim($_GET['q'] ?? '');
@@ -502,9 +561,9 @@ switch ($action) {
     // Endpoint necesario para poblar el formulario de edición antes de modificar
     case 'get_equipo':
         $id = (int)($_GET['id'] ?? 0);
-        $stmt = getDB()->prepare("SELECT * FROM equipos WHERE id = ?");
-        $stmt->execute([$id]);
-        echo json_encode(['equipo' => $stmt->fetch()]);
+        $eq = equipoActivo(getDB(), $id);
+        if (!$eq) { responderError(404, 'El equipo no existe o está en la papelera.'); break; }
+        echo json_encode(['equipo' => $eq]);
         break;
 
     case 'update_equipo':
@@ -515,15 +574,32 @@ switch ($action) {
                     'nombre_completo','grupo_usuario','marca','modelo','serial','procesador',
                     'disco_total','tipo_disco','disco_usado','tipo_ram','ram_total','ram_usada',
                     'sistema_op','ip_local','conexion','observaciones','office'];
-        $sets = []; $valores = [];
-        foreach ($campos as $c) {
-            if (array_key_exists($c, $body)) {
-                $sets[] = "`$c` = ?";
-                $valores[] = $body[$c] === '' ? null : $body[$c];
-            }
-        }
-        $valores[] = $id;
         $pdo = getDB();
+        $actual = equipoActivo($pdo, $id);
+        if (!$actual) { responderError(404, 'El equipo no existe o está en la papelera.'); break; }
+
+        $datos = [];
+        foreach ($campos as $c) {
+            if (array_key_exists($c, $body)) $datos[$c] = valorEquipo($c, $body[$c]);
+        }
+        if (array_key_exists('responsable', $datos) && $datos['responsable'] === null) {
+            responderError(400, 'El responsable es obligatorio.'); break;
+        }
+        $comp = array_key_exists('componente', $datos) ? $datos['componente'] : $actual['componente'];
+        // Se acepta el componente que ya tenía el registro aunque no esté en la lista (datos antiguos)
+        if ($comp !== $actual['componente'] && !in_array($comp, COMPONENTES_VALIDOS, true)) {
+            responderError(400, 'Componente no válido.'); break;
+        }
+        $serial = array_key_exists('serial', $datos) ? $datos['serial'] : $actual['serial'];
+        // Solo se revisa si cambió el serial o el componente (no bloquea registros antiguos ya repetidos)
+        if ($serial !== $actual['serial'] || $comp !== $actual['componente']) {
+            if ($err = serialRepetido($pdo, $serial, $comp, $id)) { responderError(409, $err); break; }
+        }
+        if (!$datos) { echo json_encode(['ok' => true]); break; }
+
+        $sets = []; $valores = [];
+        foreach ($datos as $c => $v) { $sets[] = "`$c` = ?"; $valores[] = $v; }
+        $valores[] = $id;
         $pdo->prepare("UPDATE equipos SET " . implode(', ', $sets) . " WHERE id = ?")->execute($valores);
         echo json_encode(['ok' => true]);
         break;
@@ -532,6 +608,25 @@ switch ($action) {
     case 'create_equipo':
         if ($method !== 'POST') { http_response_code(405); break; }
         $pdo = getDB();
+        $padreId = (int)($body['equipo_padre_id'] ?? 0);
+        if ($padreId > 0) {
+            $padre = equipoActivo($pdo, $padreId);
+            if (!$padre || $padre['componente'] !== 'Equipo de computo') {
+                responderError(400, 'El equipo al que se quiere agregar el periférico no existe o está en la papelera.'); break;
+            }
+        } else {
+            $padreId = null;
+        }
+        $nuevo = [];
+        foreach (array_keys(EQUIPO_LARGOS) as $c) $nuevo[$c] = valorEquipo($c, $body[$c] ?? null);
+        $nuevo['componente'] = $nuevo['componente'] ?? 'Mouse';
+        if (!in_array($nuevo['componente'], COMPONENTES_VALIDOS, true)) { responderError(400, 'Componente no válido.'); break; }
+        if ($padreId !== null && $nuevo['componente'] === 'Equipo de computo') {
+            responderError(400, 'Un periférico no puede ser un equipo de cómputo.'); break;
+        }
+        if ($nuevo['responsable'] === null) { responderError(400, 'El responsable es obligatorio.'); break; }
+        if ($err = serialRepetido($pdo, $nuevo['serial'], $nuevo['componente'])) { responderError(409, $err); break; }
+        $body = $nuevo;
         $maxItem = $pdo->query("SELECT COALESCE(MAX(item),0)+1 FROM equipos")->fetchColumn();
         
         $pdo->prepare("
@@ -542,11 +637,11 @@ switch ($action) {
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),CURTIME())
         ")->execute([
             $maxItem,
-            !empty($body['equipo_padre_id']) ? $body['equipo_padre_id'] : null,
+            $padreId,
             $body['sede'] ?? null,
             $body['area'] ?? null,
             $body['responsable'] ?? null,
-            $body['componente'] ?? 'Mouse',
+            $body['componente'],
             $body['tipo_equipo'] ?? null,
             $body['usuario_actual'] ?? null,
             $body['nombre_completo'] ?? null,
@@ -572,14 +667,21 @@ switch ($action) {
     case 'delete_equipo':
         $id = (int)($body['id'] ?? 0);
         $pdo = getDB();
+        if (!equipoActivo($pdo, $id)) { responderError(404, 'El equipo no existe o ya está en la papelera.'); break; }
+        asegurarTablaVigencias($pdo);
+        // Mismo instante para todo lo que se va junto, así al restaurar vuelve exactamente lo mismo
+        $ahora = $pdo->query("SELECT NOW()")->fetchColumn();
         // Si es un equipo padre, sus periféricos anidados (mouse/teclado) se van con él a la papelera
         $hijos = $pdo->prepare("SELECT id FROM equipos WHERE equipo_padre_id = ? AND deleted_at IS NULL");
         $hijos->execute([$id]);
         $todos = array_merge([$id], array_column($hijos->fetchAll(), 'id'));
         $in = implode(',', array_fill(0, count($todos), '?'));
-        $pdo->prepare("UPDATE equipos SET deleted_at = NOW() WHERE id IN ($in)")->execute($todos);
-        // Y con ellos, todo el software asociado (evita huérfanos)
-        $pdo->prepare("UPDATE software SET deleted_at = NOW() WHERE equipo_id IN ($in) AND deleted_at IS NULL")->execute($todos);
+        $pdo->beginTransaction();
+        $pdo->prepare("UPDATE equipos SET deleted_at = ? WHERE id IN ($in)")->execute(array_merge([$ahora], $todos));
+        // Y con ellos, todo el software y las vigencias asociadas (evita huérfanos)
+        $pdo->prepare("UPDATE software SET deleted_at = ? WHERE equipo_id IN ($in) AND deleted_at IS NULL")->execute(array_merge([$ahora], $todos));
+        $pdo->prepare("UPDATE vigencias SET deleted_at = ? WHERE equipo_id IN ($in) AND deleted_at IS NULL")->execute(array_merge([$ahora], $todos));
+        $pdo->commit();
         echo json_encode(['ok' => true]);
         break;
 
@@ -609,15 +711,27 @@ switch ($action) {
         if ($method !== 'POST') { http_response_code(405); break; }
         $id = (int)($body['id'] ?? 0);
         $nuevoResp = trim($body['responsable'] ?? '');
-        if ($id <= 0 || $nuevoResp === '') { http_response_code(400); echo json_encode(['error' => 'Datos incompletos']); break; }
-        getDB()->prepare("UPDATE equipos SET responsable = ? WHERE id = ? AND componente = 'Equipo de computo'")->execute([$nuevoResp, $id]);
+        if ($id <= 0 || $nuevoResp === '') { responderError(400, 'Datos incompletos.'); break; }
+        $pdo = getDB();
+        $eq = equipoActivo($pdo, $id);
+        if (!$eq || $eq['componente'] !== 'Equipo de computo') { responderError(404, 'El equipo no existe o está en la papelera.'); break; }
+        $pdo->prepare("UPDATE equipos SET responsable = ? WHERE id = ?")->execute([mb_substr($nuevoResp, 0, 150), $id]);
         echo json_encode(['ok' => true]);
         break;
 
     case 'add_software':
         $pdo = getDB();
+        $eqId = (int)($body['equipo_id'] ?? 0);
+        if (!equipoActivo($pdo, $eqId)) { responderError(404, 'El equipo no existe o está en la papelera.'); break; }
+        $programa = textoOpcional($body['programa'] ?? '', 300);
+        $version  = textoOpcional($body['version'] ?? '', 100);
+        if ($programa === null) { responderError(400, 'Escribe el nombre del programa.'); break; }
+        $dup = $pdo->prepare("SELECT 1 FROM software WHERE equipo_id = ? AND deleted_at IS NULL
+            AND LOWER(TRIM(programa)) = LOWER(?) AND COALESCE(LOWER(TRIM(version)),'') = COALESCE(LOWER(?),'')");
+        $dup->execute([$eqId, $programa, $version]);
+        if ($dup->fetchColumn()) { responderError(409, 'Ese programa ya está registrado en este equipo.'); break; }
         $pdo->prepare("INSERT INTO software (equipo_id,programa,version) VALUES (?,?,?)")
-            ->execute([(int)$body['equipo_id'], $body['programa'] ?? '', $body['version'] ?? null]);
+            ->execute([$eqId, $programa, $version]);
         echo json_encode(['ok'=>true, 'id'=>(int)$pdo->lastInsertId()]);
         break;
 
@@ -628,12 +742,14 @@ switch ($action) {
 
     case 'papelera':
         $pdo = getDB();
+        asegurarTablaVigencias($pdo);
         // Solo se listan sueltos los equipos/periféricos que NO son hijos de un equipo
         // que también está en la papelera (si el padre está, el hijo va incluido/anidado en él)
         $equipos = $pdo->query("
             SELECT e.id, e.componente, e.tipo_equipo, e.marca, e.modelo, e.serial, e.responsable, e.deleted_at,
                    (SELECT COUNT(*) FROM software s WHERE s.equipo_id = e.id AND s.deleted_at IS NOT NULL) AS software_incluido,
-                   (SELECT COUNT(*) FROM equipos c WHERE c.equipo_padre_id = e.id AND c.deleted_at IS NOT NULL) AS perifericos_incluidos
+                   (SELECT COUNT(*) FROM equipos c WHERE c.equipo_padre_id = e.id AND c.deleted_at IS NOT NULL) AS perifericos_incluidos,
+                   (SELECT COUNT(*) FROM vigencias v WHERE v.equipo_id = e.id AND v.deleted_at >= e.deleted_at) AS vigencias_incluidas
             FROM equipos e
             WHERE e.deleted_at IS NOT NULL
               AND (e.equipo_padre_id IS NULL OR NOT EXISTS (
@@ -669,10 +785,12 @@ switch ($action) {
         $tareas = $pdo->query("
             SELECT id, titulo, descripcion, deleted_at
             FROM tareas WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")->fetchAll();
-        asegurarTablaVigencias($pdo);
+        // Las vigencias de un equipo que está en la papelera van incluidas en él, no sueltas
         $vigencias = $pdo->query("
-            SELECT id, tipo, nombre, proveedor, fecha_vencimiento, deleted_at
-            FROM vigencias WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")->fetchAll();
+            SELECT v.id, v.tipo, v.nombre, v.proveedor, v.fecha_vencimiento, v.deleted_at
+            FROM vigencias v LEFT JOIN equipos e ON e.id = v.equipo_id
+            WHERE v.deleted_at IS NOT NULL AND (e.id IS NULL OR e.deleted_at IS NULL)
+            ORDER BY v.deleted_at DESC")->fetchAll();
         echo json_encode(['equipos' => $equipos, 'software' => $software, 'tareas' => $tareas, 'vigencias' => $vigencias]);
         break;
 
@@ -697,12 +815,21 @@ switch ($action) {
         }
 
         // Restaura el equipo y, si es un equipo padre, sus periféricos + todo el software asociado
+        asegurarTablaVigencias($pdo);
+        $cuando = $pdo->prepare("SELECT deleted_at FROM equipos WHERE id = ?");
+        $cuando->execute([$id]);
+        $borradoEn = $cuando->fetchColumn();
+        if (!$borradoEn) { responderError(404, 'El equipo no está en la papelera.'); break; }
         $hijos = $pdo->prepare("SELECT id FROM equipos WHERE equipo_padre_id = ?");
         $hijos->execute([$id]);
         $todos = array_merge([$id], array_column($hijos->fetchAll(), 'id'));
         $in = implode(',', array_fill(0, count($todos), '?'));
+        $pdo->beginTransaction();
         $pdo->prepare("UPDATE equipos SET deleted_at = NULL WHERE id IN ($in)")->execute($todos);
         $pdo->prepare("UPDATE software SET deleted_at = NULL WHERE equipo_id IN ($in)")->execute($todos);
+        // Solo las vigencias que se fueron junto con el equipo (las borradas antes a mano se quedan en la papelera)
+        $pdo->prepare("UPDATE vigencias SET deleted_at = NULL WHERE equipo_id IN ($in) AND deleted_at >= ?")->execute(array_merge($todos, [$borradoEn]));
+        $pdo->commit();
         echo json_encode(['ok'=>true]);
         break;
 
@@ -737,8 +864,12 @@ switch ($action) {
         $hijos->execute([$id]);
         $todos = array_merge([$id], array_column($hijos->fetchAll(), 'id'));
         $in = implode(',', array_fill(0, count($todos), '?'));
+        asegurarTablaVigencias($pdo);
+        $pdo->beginTransaction();
+        $pdo->prepare("DELETE FROM vigencias WHERE equipo_id IN ($in) AND deleted_at IS NOT NULL")->execute($todos);
         $pdo->prepare("DELETE FROM software WHERE equipo_id IN ($in)")->execute($todos);
         $pdo->prepare("DELETE FROM equipos WHERE id IN ($in)")->execute($todos);
+        $pdo->commit();
         echo json_encode(['ok' => true]);
         break;
 
@@ -756,11 +887,13 @@ switch ($action) {
 
     case 'vaciar_papelera':
         $pdo = getDB();
+        asegurarTablaVigencias($pdo);
+        $pdo->beginTransaction();
+        $pdo->exec("DELETE FROM vigencias WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM software WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM equipos WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM tareas WHERE deleted_at IS NOT NULL");
-        asegurarTablaVigencias($pdo);
-        $pdo->exec("DELETE FROM vigencias WHERE deleted_at IS NOT NULL");
+        $pdo->commit();
         echo json_encode(['ok' => true]);
         break;
 
@@ -773,13 +906,16 @@ switch ($action) {
     case 'crear_tarea':
         if ($method !== 'POST') { http_response_code(405); break; }
         $pdo = getDB();
+        $titulo = textoOpcional($body['titulo'] ?? '', 200);
+        if ($titulo === null) { responderError(400, 'Escribe un título para la tarea.'); break; }
+        $color = in_array($body['color'] ?? '', COLORES_TAREA, true) ? $body['color'] : 'verde';
         $maxOrden = $pdo->query("SELECT COALESCE(MAX(orden),0)+1 FROM tareas WHERE estado='pendiente'")->fetchColumn();
         $stmt = $pdo->prepare("INSERT INTO tareas (titulo, descripcion, estado, color, orden) VALUES (?,?,?,?,?)");
         $stmt->execute([
-            trim($body['titulo'] ?? ''),
-            $body['descripcion'] ?? null,
+            $titulo,
+            textoOpcional($body['descripcion'] ?? '', 5000),
             'pendiente',
-            $body['color'] ?? 'verde',
+            $color,
             $maxOrden,
         ]);
         echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
@@ -790,16 +926,31 @@ switch ($action) {
         $id = (int)($body['id'] ?? 0);
         $pdo = getDB();
 
+        $existe = $pdo->prepare("SELECT 1 FROM tareas WHERE id = ? AND deleted_at IS NULL");
+        $existe->execute([$id]);
+        if (!$existe->fetchColumn()) { responderError(404, 'La tarea no existe o está en la papelera.'); break; }
+
         $sets = []; $valores = [];
-        if (array_key_exists('titulo', $body))       { $sets[] = "titulo = ?";       $valores[] = $body['titulo']; }
-        if (array_key_exists('descripcion', $body))  { $sets[] = "descripcion = ?";  $valores[] = $body['descripcion']; }
-        if (array_key_exists('color', $body))        { $sets[] = "color = ?";        $valores[] = $body['color']; }
-        if (array_key_exists('orden', $body))        { $sets[] = "orden = ?";        $valores[] = (int)$body['orden']; }
         if (array_key_exists('estado', $body)) {
+            if (!in_array($body['estado'], ESTADOS_TAREA, true)) { responderError(400, 'Estado de tarea no válido.'); break; }
+            // La fecha de completado solo cambia si la tarea cambia de estado (va antes de "estado = ?"
+            // porque MySQL evalúa las asignaciones en orden)
+            $sets[] = "completado_at = CASE WHEN estado = ? THEN completado_at WHEN ? = 'completada' THEN NOW() ELSE NULL END";
+            $valores[] = $body['estado']; $valores[] = $body['estado'];
             $sets[] = "estado = ?";
             $valores[] = $body['estado'];
-            $sets[] = "completado_at = " . ($body['estado'] === 'completada' ? "NOW()" : "NULL");
         }
+        if (array_key_exists('titulo', $body)) {
+            $t = textoOpcional($body['titulo'], 200);
+            if ($t === null) { responderError(400, 'Escribe un título para la tarea.'); break; }
+            $sets[] = "titulo = ?"; $valores[] = $t;
+        }
+        if (array_key_exists('descripcion', $body))  { $sets[] = "descripcion = ?";  $valores[] = textoOpcional($body['descripcion'], 5000); }
+        if (array_key_exists('color', $body)) {
+            if (!in_array($body['color'], COLORES_TAREA, true)) { responderError(400, 'Color no válido.'); break; }
+            $sets[] = "color = ?"; $valores[] = $body['color'];
+        }
+        if (array_key_exists('orden', $body))        { $sets[] = "orden = ?";        $valores[] = (int)$body['orden']; }
         if (!$sets) { echo json_encode(['ok' => true]); break; }
         $valores[] = $id;
         $pdo->prepare("UPDATE tareas SET " . implode(', ', $sets) . " WHERE id = ?")->execute($valores);
@@ -866,6 +1017,10 @@ switch ($action) {
     case 'restore_vigencia':
         $pdo = getDB();
         asegurarTablaVigencias($pdo);
+        $st = $pdo->prepare("SELECT e.deleted_at FROM vigencias v LEFT JOIN equipos e ON e.id = v.equipo_id WHERE v.id = ?");
+        $st->execute([(int)($body['id'] ?? 0)]);
+        $eqBorrado = $st->fetchColumn();
+        if ($eqBorrado) { responderError(409, 'Esta vigencia pertenece a un equipo que sigue en la papelera. Restaura primero el equipo.'); break; }
         $pdo->prepare("UPDATE vigencias SET deleted_at = NULL WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
         echo json_encode(['ok' => true]);
         break;

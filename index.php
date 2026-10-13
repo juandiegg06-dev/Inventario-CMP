@@ -817,12 +817,38 @@ const CARD_COLORS = { verde:'#8BC34A', amarillo:'#F2C94C', rojo:'#EB5757', azul:
 let selectedColor = 'verde';
 let dragTareaId = null;
 let activeUser = null;
+let vistaActual = 'tareas';
+
+/* Vuelve a cargar los datos de la vista en la que está el usuario (sin cambiarlo de sección) */
+function recargarVista(){
+  if(vistaActual === 'usuario' && activeUser) return verUsuario(activeUser);
+  if(vistaActual === 'usuarios') return loadResponsables(usrQuery);
+  if(vistaActual === 'tareas') return refreshKanban();
+  if(vistaActual === 'vigencias') return refreshVigencias();
+  if(vistaActual === 'stats') return loadDashboard();
+}
+
+/* Error ya mostrado al usuario: detiene la acción sin mostrar "Guardado" ni nada de éxito */
+class ApiError extends Error {}
+window.addEventListener('unhandledrejection', e=>{ if(e.reason instanceof ApiError) e.preventDefault(); });
 
 async function api(params, body=null){
   const url = API + '?' + new URLSearchParams(params);
   const opts = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {method:'GET'};
-  const r = await fetch(url, opts);
-  return await r.json();
+  let r;
+  try { r = await fetch(url, opts); }
+  catch(e){
+    toast('No se pudo conectar con el servidor. Revisa que XAMPP (Apache y MySQL) esté encendido.', I.close);
+    throw new ApiError('sin conexión');
+  }
+  let data = null;
+  try { data = await r.json(); } catch(e){}
+  if(!r.ok || !data || data.error){
+    const msg = (data && data.error) || `El servidor respondió con un error (${r.status}). No se guardaron los cambios.`;
+    toast(msg, I.close);
+    throw new ApiError(msg);
+  }
+  return data;
 }
 
 function marcarNav(id){
@@ -831,8 +857,9 @@ function marcarNav(id){
 
 function toast(msg, icon=I.check){
   const t = document.getElementById('toast');
-  t.innerHTML = icon + '<span>' + msg + '</span>'; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 3000);
+  t.innerHTML = icon + '<span>' + esc(msg) + '</span>'; t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), icon === I.close ? 5000 : 3000);
 }
 function closeModal(id){ document.getElementById(id).style.display='none'; }
 function esc(s){ return (s===null||s===undefined) ? '' : String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -881,6 +908,7 @@ function vigKpiHTML(v){
 }
 
 async function loadDashboard(){
+  vistaActual = 'stats';
   activeUser = null; vigViewActiva = false; marcarNav('btnStats');
   const d = await api({action:'stats'});
 
@@ -971,6 +999,7 @@ let usrQuery = '';
 let usrDebounce = null;
 
 async function loadUsuarios(q=usrQuery){
+  vistaActual = 'usuarios';
   activeUser = null; vigViewActiva = false; marcarNav('btnUsuarios');
   usrQuery = q || '';
   document.getElementById('rightPanel').innerHTML = `
@@ -1034,6 +1063,7 @@ function selEquipo(idx){
 }
 
 async function verUsuario(nombre){
+  vistaActual = 'usuario';
   vigViewActiva = false; marcarNav('btnUsuarios');
   activeUser = nombre;
   const d = await api({action:'responsable', nombre});
@@ -1240,8 +1270,7 @@ async function guardarEquipo(){
   body.equipo_padre_id = document.getElementById('mePadreId').value;
   await api({action: body.id ? 'update_equipo' : 'create_equipo'}, body);
   closeModal('modalEquipo'); toast('Guardado correctamente');
-  loadResponsables();
-  if(activeUser) verUsuario(activeUser); else loadDashboard();
+  recargarVista();
 }
 
 async function borrarEquipo(id, resp){
@@ -1379,6 +1408,7 @@ function fmtFH(fh){
 }
 
 async function loadImpresoras(){
+  vistaActual = 'impresoras';
   activeUser = null; vigViewActiva = false; marcarNav('btnImpresoras');
   document.getElementById('rightPanel').innerHTML = `
     <div class="view-fade" id="impLive">
@@ -1623,6 +1653,7 @@ function vigBadge(v){
 }
 
 async function loadVigencias(){
+  vistaActual = 'vigencias';
   activeUser = null; vigViewActiva = true; marcarNav('btnVigencias');
   document.getElementById('rightPanel').innerHTML = `
     <div class="view-fade">
@@ -1705,7 +1736,6 @@ async function abrirModalVigencia(id=null, equipoId=null){
   document.getElementById('vigModalTitle').innerHTML = I.calendar + '<span>' + (id ? 'Editar vigencia' : 'Nueva vigencia') + '</span>';
   if(id){
     const r = await api({action:'get_vigencia', id});
-    if(r.error){ toast(r.error, I.close); return; }
     const v = r.vigencia;
     set('vigId',v.id); set('vigTipo',v.tipo); set('vigEquipo',v.equipo_id||''); set('vigNombre',v.nombre);
     set('vigProveedor',v.proveedor); set('vigReferencia',v.referencia); set('vigInicio',v.fecha_inicio);
@@ -1737,7 +1767,6 @@ async function guardarVigencia(){
   if(!body.fecha_vencimiento){ toast('Indica la fecha de vencimiento', I.close); return; }
   if(id) body.id = Number(id);
   const res = await api({action: id ? 'actualizar_vigencia' : 'crear_vigencia'}, body);
-  if(res && res.error){ toast(res.error, I.close); return; }
   closeModal('modalVigencia');
   toast(id ? 'Vigencia actualizada' : 'Vigencia registrada');
   if(vigViewActiva && document.getElementById('vigTabla')) refreshVigencias();
@@ -1773,6 +1802,7 @@ function papItemEquipoHTML(e){
   const incluye = [];
   if(e.perifericos_incluidos > 0) incluye.push(`${e.perifericos_incluidos} periférico${e.perifericos_incluidos==1?'':'s'}`);
   if(e.software_incluido > 0) incluye.push(`${e.software_incluido} software`);
+  if(e.vigencias_incluidas > 0) incluye.push(`${e.vigencias_incluidas} vigencia${e.vigencias_incluidas==1?'':'s'}`);
 
   const swLista = e.software_lista || [];
   const swListHTML = swLista.length ? `
@@ -1876,7 +1906,6 @@ async function borrarPermanente(tipo, id){
   const permMap = { equipo:'delete_equipo_permanente', software:'delete_software_permanente', tarea:'delete_tarea_permanente', vigencia:'delete_vigencia_permanente' };
   const action = permMap[tipo];
   const res = await api({action}, {id});
-  if(res && res.error){ toast(res.error, I.close); return; }
   toast('Elemento eliminado definitivamente', I.trash);
   abrirPapelera();
 }
@@ -1884,17 +1913,14 @@ async function borrarPermanente(tipo, id){
 async function restaurar(tipo, id){
   const actionMap = { equipo: 'restore_equipo', software: 'restore_software', tarea: 'restore_tarea', vigencia: 'restore_vigencia' };
   const res = await api({action: actionMap[tipo]}, {id});
-  if(res && res.error){ toast(res.error, I.close); return; }
   toast('Elemento restaurado', I.refresh);
   abrirPapelera();
-  loadResponsables();
-  if(activeUser) verUsuario(activeUser); else loadDashboard();
-  if(tipo === 'tarea') refreshKanban();
-  if(tipo === 'vigencia' && vigViewActiva) loadVigencias();
+  recargarVista();
 }
 
 /* ============ TABLERO KANBAN (TAREAS) ============ */
 async function loadKanban(){
+  vistaActual = 'tareas';
   activeUser = null; vigViewActiva = false; marcarNav('btnTareas');
   const rp = document.getElementById('rightPanel');
   rp.innerHTML = `
