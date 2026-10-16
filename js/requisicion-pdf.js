@@ -1,20 +1,26 @@
 /*
  * PDF del FORMATO DE REQUISICIÓN DE COMPRAS (MA-PC-FT-001).
- * Reproduce la hoja "FORMATO REQUISICIONES" del Excel en una página carta horizontal.
+ * Reproduce la hoja "FORMATO REQUISICIONES" del Excel en hojas carta horizontales:
+ * 15 ítems por página; si hay más, continúa en otra página con el mismo encabezado.
+ * Observaciones y firmas van en la última página. Las celdas de etiqueta van en blanco
+ * (sin el color piel del Excel) para imprimir mejor.
  * Requiere js/jspdf.umd.min.js (window.jspdf).
  */
 (function(){
-  const NARANJA = [248, 203, 173];   // celdas de etiqueta del formato
   const VERDE   = [226, 239, 217];   // REQ N° y nota
   const NEGRO   = [0, 0, 0];
 
   const fmtFecha = f => { if(!f) return ''; const [y,m,d] = String(f).slice(0,10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; };
   const fmtCant = n => { const v = Number(n); return Number.isInteger(v) ? String(v) : v.toLocaleString('es-CO', {maximumFractionDigits:2}); };
 
+  const POR_PAGINA = 15;
+
   function crear(req, formato, logo){
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'letter' });
     const M = 8, W = 279.4 - 2*M;          // margen y ancho útil
+    const items = req.items || [];
+    const paginas = Math.max(1, Math.ceil(items.length / POR_PAGINA));
     let y = M;
     doc.setLineWidth(0.2); doc.setDrawColor(...NEGRO); doc.setTextColor(...NEGRO);
 
@@ -43,6 +49,14 @@
       lineas.forEach(l => { doc.text(l, tx, ty, {align}); ty += lh; });
     }
 
+    for(let pag = 1; pag <= paginas; pag++){
+      if(pag > 1) doc.addPage();
+      y = M;
+      pagina(pag);
+    }
+
+    function pagina(pag){
+    const ultima = pag === paginas;
     /* ---------- Encabezado ---------- */
     const hH = 4.6, wLogo = 50.5, wTit = 150, wLab = 25.2;
     const wVal = W - wLogo - wTit - wLab;
@@ -60,12 +74,12 @@
       celda(xL, y + i*hH, wLab, hH, l, {bold:true, size:7.5});
       celda(xV, y + i*hH, wVal, hH, v, {size:7.5});
     });
-    celda(xL, y + 3*hH, wLab + wVal, hH, 'PÁGINA 1 de 1', {bold:true, size:7.5});
+    celda(xL, y + 3*hH, wLab + wVal, hH, `PÁGINA ${pag} de ${paginas}`, {bold:true, size:7.5});
     y += hH*4 + 4;
 
     /* ---------- Datos generales ---------- */
     const wEt = 21.5, rH = 5.2, gap = 2.6;
-    const lab = (x, w, t) => celda(x, y, w, rH, t, {fill:NARANJA, bold:true, size:7});
+    const lab = (x, w, t) => celda(x, y, w, rH, t, {bold:true, size:7});
     // REQ N°
     lab(M, wEt, 'REQ N°');
     celda(M + wEt, y, 37, rH, req.codigo, {fill:VERDE, bold:true, size:8});
@@ -95,15 +109,15 @@
     celda(M + 194.5, y, W - 194.5, rH, req.autorizado_por, {size:7});
     y += rH + gap;
 
-    /* ---------- Tabla de artículos (15 filas como el formato) ---------- */
+    /* ---------- Tabla de artículos (15 filas por página, como el formato) ---------- */
     const cols = [['ITEM',14],['CANTIDAD',17],['UNIDAD',19],['ARTICULO O SERVICIO',0],['PROVEEDOR (O SUGERIDO)',39],['CENTRO DE TRABAJO',45]];
     cols[3][1] = W - cols.reduce((a,c)=>a + c[1], 0);
     let x = M;
-    cols.forEach(([t, w]) => { celda(x, y, w, 5, t, {fill:NARANJA, bold:true, size:7}); x += w; });
+    cols.forEach(([t, w]) => { celda(x, y, w, 5, t, {bold:true, size:7}); x += w; });
     y += 5;
-    const fH = 5.0, filas = 15;
-    for(let i = 0; i < filas; i++){
-      const it = (req.items || [])[i];
+    const fH = 5.0, inicio = (pag - 1) * POR_PAGINA;
+    for(let i = inicio; i < inicio + POR_PAGINA; i++){
+      const it = items[i];
       const vals = it ? [String(i+1), fmtCant(it.cantidad), it.unidad || '', it.articulo || '', it.proveedor || '', it.centro_trabajo || '']
                       : [String(i+1), '', '', '', '', ''];
       x = M;
@@ -114,8 +128,13 @@
     celda(M, y, W, 8, 'En el campo de artículo o servicio, indicar de manera clara, las caracteristicas del producto o servicio, modelo, color, material de elaboración y cualquier otra especificación importante para solicitar una correcta cotización y proceso de compra.', {fill:VERDE, italic:true, size:6.8, align:'left', pad:2});
     y += 8 + gap;
 
-    /* ---------- Observaciones (naranja) ---------- */
-    celda(M, y, W, 13, req.observaciones || '', {fill:NARANJA, size:7.5});
+    if(!ultima){
+      celda(M, y, W, 6, `Continúa en la página ${pag + 1}…`, {borde:false, italic:true, size:7.5, align:'right'});
+      return;
+    }
+
+    /* ---------- Observaciones ---------- */
+    celda(M, y, W, 13, req.observaciones || '', {size:7.5});
     y += 13 + gap;
 
     /* ---------- Firmas ---------- */
@@ -139,6 +158,7 @@
     celda(M + wS, sy - lH, wR, lH, 'FIRMA', {size:6.5});
     celda(M + wS + wR, fy + cabH, wA, altoFirma - lH, '');
     celda(M + wS + wR, sy - lH, wA, lH, 'FIRMA', {size:6.5});
+    }
 
     doc.setProperties({ title: `Requisición ${req.codigo}`, subject: 'Formato de requisición de compras MA-PC-FT-001', creator: 'InvCMP' });
     return doc;

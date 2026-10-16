@@ -446,7 +446,7 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .req-code b{font-family:var(--mono);font-size:1.15rem;font-weight:500;letter-spacing:.02em;background:#E5F2DC;color:#2C4A1E;border:1px solid #CFE5BF;border-radius:10px;padding:.42rem .8rem}
 .req-code b i{font-style:normal;color:#7A9A66}
 .req-code small{font-size:.74rem;color:var(--mute)}
-.req-items-wrap{border:1px solid var(--line);border-radius:14px;overflow-x:auto;margin:.4rem 0 .6rem}
+.req-items-wrap{position:relative;border:1px solid var(--line);border-radius:14px;overflow-x:auto;margin:.4rem 0 .6rem}
 .req-items{width:100%;border-collapse:collapse;min-width:920px}
 .req-items th{font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8A4A22;background:#FFE6D6;padding:.55rem .5rem;text-align:left;white-space:nowrap}
 .req-items td{padding:.28rem .3rem;border-top:1px solid var(--line);vertical-align:top}
@@ -468,6 +468,16 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .firma-fija .ic{width:13px;height:13px;color:var(--c-deep)}
 .req-firma.vacia{display:flex;flex-direction:column;justify-content:space-between;min-height:120px}
 .req-firma.vacia p{font-size:.76rem;color:var(--mute);border-top:1px dashed var(--line-2);padding-top:.5rem;text-align:center}
+.rf-hint{font-size:.7rem;color:var(--mute)}
+.req-items td:last-child{padding-top:.45rem;text-align:center}
+.req-del{width:28px;height:28px;border-radius:50%;border:1px solid transparent;background:none;color:var(--mute);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s,border-color .15s}
+.req-del:hover{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-line)}
+.req-add-bar{display:flex;align-items:center;gap:.8rem;margin:-.1rem 0 .9rem}
+.req-add{display:inline-flex;align-items:center;gap:.45rem;border:1.5px dashed var(--line-2);background:var(--card);color:var(--ink-2);border-radius:999px;padding:.5rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+.req-add:hover:not(:disabled){border-color:var(--c-lime);background:var(--accent-soft);color:var(--accent-ink)}
+.req-add:disabled{opacity:.5;cursor:not-allowed}
+.req-add-bar small{font-size:.76rem;color:var(--mute)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .req-acciones{display:flex;justify-content:flex-end;align-items:center;gap:.55rem;padding:1rem 1.5rem;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
 .req-acciones .hint{margin-right:auto;font-size:.78rem;color:var(--mute)}
 .req-prio{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;font-weight:800;padding:.2rem .6rem;border-radius:999px;background:var(--soft-2);color:var(--ink-2)}
@@ -2186,17 +2196,9 @@ function opciones(lista, sel, conCodigo, vacio='Seleccionar...'){
 function pintarFormReq(){
   const L = reqListas, b = reqBorrador || {};
   const def = (k, lista) => b[k] ?? (lista.length === 1 ? (typeof lista[0]==='string' ? lista[0] : lista[0].cod) : '');
-  const filas = Array.from({length: L.max_items}, (_, i) => {
-    const it = (b.items || [])[i] || {};
-    return `<tr>
-      <td>${i+1}</td>
-      <td style="width:92px"><input type="number" min="0" step="any" inputmode="decimal" data-k="cantidad" value="${esc(it.cantidad ?? '')}" aria-label="Cantidad fila ${i+1}"></td>
-      <td style="width:130px"><select data-k="unidad" aria-label="Unidad fila ${i+1}">${opciones(L.unidades, it.unidad, false, '')}</select></td>
-      <td><textarea rows="1" data-k="articulo" maxlength="1000" aria-label="Artículo o servicio fila ${i+1}" placeholder="${i===0?'Ej: Monitor Samsung 22&quot; S3 Full HD HDMI VGA 120Hz':''}">${esc(it.articulo ?? '')}</textarea></td>
-      <td style="width:190px"><input data-k="proveedor" maxlength="200" value="${esc(it.proveedor ?? '')}" aria-label="Proveedor fila ${i+1}"></td>
-      <td style="width:200px"><select data-k="centro_trabajo" aria-label="Centro de trabajo fila ${i+1}">${opciones(L.centros_trabajo, it.centro_trabajo, false, '')}</select></td>
-    </tr>`;
-  }).join('');
+  // Se empieza con una fila; con el botón + se agregan las que hagan falta
+  const items = (b.items && b.items.length) ? b.items : [{}];
+  const filas = items.map((it, i) => filaReqHTML(i, it)).join('');
 
   document.getElementById('reqContenido').innerHTML = `
   <form class="card req-sheet" id="reqForm" novalidate onsubmit="event.preventDefault();exportarRequisicion()" oninput="reqCambio(event)" onchange="reqCambio(event)">
@@ -2208,8 +2210,8 @@ function pintarFormReq(){
     <div class="req-body">
       <div class="req-top">
         <div class="rf span4"><label>REQ N°</label><div class="req-code"><b id="reqCodigo"></b><small>Se arma solo: empresa · área · solicitante · consecutivo</small></div></div>
-        <div class="rf"><label for="reqFecha">Fecha</label><input id="reqFecha" readonly value="${esc(fmtFecha(L.hoy))}"></div>
-        <div class="rf"><label for="reqCons">Consecutivo</label><input id="reqCons" readonly value="${L.siguiente} (se asigna al exportar)"></div>
+        <div class="rf"><label for="reqFecha">Fecha</label><input type="date" id="reqFecha" name="fecha" required value="${esc(b.fecha || L.hoy)}"></div>
+        <div class="rf"><label for="reqCons">Consecutivo</label><input type="number" id="reqCons" name="consecutivo" min="1" step="1" inputmode="numeric" required value="${esc(b.consecutivo ?? L.siguiente)}"><small class="rf-hint">Sigue el orden (próximo: ${L.siguiente}). Puedes cambiarlo.</small></div>
         <div class="rf span2"><label for="reqPrioridad">Prioridad</label><select id="reqPrioridad" name="prioridad" required>${opciones(L.prioridades, b.prioridad)}</select></div>
         <div class="rf span4"><label for="reqEmpresa">Empresa</label><select id="reqEmpresa" name="empresa_cod" required>${opciones(L.empresas, def('empresa_cod', L.empresas))}</select></div>
         <div class="rf span2"><label for="reqArea">Área</label><select id="reqArea" name="area_cod" required>${opciones(L.areas, b.area_cod, true)}</select></div>
@@ -2220,9 +2222,13 @@ function pintarFormReq(){
 
       <div class="req-items-wrap">
         <table class="req-items" id="reqItems">
-          <thead><tr><th>Ítem</th><th>Cantidad</th><th>Unidad</th><th>Artículo o servicio</th><th>Proveedor (o sugerido)</th><th>Centro de trabajo</th></tr></thead>
+          <thead><tr><th>Ítem</th><th>Cantidad</th><th>Unidad</th><th>Artículo o servicio</th><th>Proveedor (o sugerido)</th><th>Centro de trabajo</th><th><span class="sr-only">Quitar</span></th></tr></thead>
           <tbody>${filas}</tbody>
         </table>
+      </div>
+      <div class="req-add-bar">
+        <button type="button" class="req-add" id="btnAgregarItem" onclick="agregarFilaReq()">${I.plus}<span>Agregar ítem</span></button>
+        <small id="reqItemsCuenta"></small>
       </div>
       <p class="req-nota">En el campo de artículo o servicio, indicar de manera clara, las características del producto o servicio, modelo, color, material de elaboración y cualquier otra especificación importante para solicitar una correcta cotización y proceso de compra.</p>
 
@@ -2243,14 +2249,63 @@ function pintarFormReq(){
       </div>
     </div>
     <div class="req-acciones">
-      <span class="hint">Al exportar se guarda en el historial con el consecutivo N.° ${L.siguiente} o el siguiente disponible.</span>
+      <span class="hint">Al exportar se guarda en el historial con el consecutivo que aparece arriba.</span>
       <button type="button" class="btn btn-ghost" onclick="limpiarReq()">Limpiar</button>
       <button type="submit" class="btn btn-primary" id="btnExportarReq">${I.download}<span>Guardar y descargar PDF</span></button>
     </div>
   </form>`;
   document.querySelectorAll('#reqItems textarea').forEach(autoAltura);
-  marcarFilasReq();
+  renumerarFilasReq();
   actualizarCodigoReq();
+}
+
+function filaReqHTML(i, it = {}){
+  const L = reqListas;
+  return `<tr>
+      <td>${i+1}</td>
+      <td style="width:92px"><input type="number" min="0" step="any" inputmode="decimal" data-k="cantidad" value="${esc(it.cantidad ?? '')}" aria-label="Cantidad"></td>
+      <td style="width:130px"><select data-k="unidad" aria-label="Unidad">${opciones(L.unidades, it.unidad, false, '')}</select></td>
+      <td><textarea rows="1" data-k="articulo" maxlength="1000" aria-label="Artículo o servicio">${esc(it.articulo ?? '')}</textarea></td>
+      <td style="width:190px"><input data-k="proveedor" maxlength="200" value="${esc(it.proveedor ?? '')}" aria-label="Proveedor"></td>
+      <td style="width:200px"><select data-k="centro_trabajo" aria-label="Centro de trabajo">${opciones(L.centros_trabajo, it.centro_trabajo, false, '')}</select></td>
+      <td style="width:44px"><button type="button" class="req-del" title="Quitar ítem" aria-label="Quitar ítem" onclick="quitarFilaReq(this)">${I.close}</button></td>
+    </tr>`;
+}
+function renumerarFilasReq(){
+  const filas = [...document.querySelectorAll('#reqItems tbody tr')];
+  filas.forEach((tr, i)=>{
+    tr.firstElementChild.textContent = i + 1;
+    const art = tr.querySelector('[data-k=articulo]');
+    art.placeholder = i === 0 ? 'Ej: Monitor Samsung 22" S3 Full HD HDMI VGA 120Hz' : '';
+  });
+  const max = reqListas.max_items;
+  const btn = document.getElementById('btnAgregarItem'); if(btn) btn.disabled = filas.length >= max;
+  const c = document.getElementById('reqItemsCuenta');
+  if(c) c.textContent = `${filas.length} ítem${filas.length==1?'':'s'}` + (filas.length > 15 ? ` · el PDF tendrá ${Math.ceil(filas.length/15)} páginas` : '') + (filas.length >= max ? ` · máximo ${max}` : '');
+  marcarFilasReq();
+}
+function agregarFilaReq(){
+  const tb = document.querySelector('#reqItems tbody');
+  if(tb.children.length >= reqListas.max_items){ toast(`Máximo ${reqListas.max_items} ítems por requisición`, I.close); return; }
+  tb.insertAdjacentHTML('beforeend', filaReqHTML(tb.children.length));
+  renumerarFilasReq();
+  const nueva = tb.lastElementChild;
+  autoAltura(nueva.querySelector('textarea'));
+  nueva.querySelector('[data-k=cantidad]').focus();
+  reqBorrador = leerFormReq();
+}
+function quitarFilaReq(btn){
+  const tb = document.querySelector('#reqItems tbody');
+  const tr = btn.closest('tr');
+  if(tb.children.length === 1){
+    // Siempre queda al menos una fila: solo se vacía
+    tr.querySelectorAll('[data-k]').forEach(e=>{ e.value = ''; });
+    autoAltura(tr.querySelector('textarea'));
+  } else {
+    tr.remove();
+  }
+  renumerarFilasReq();
+  reqBorrador = leerFormReq();
 }
 
 function autoAltura(t){ t.style.height = 'auto'; t.style.height = Math.max(34, t.scrollHeight) + 'px'; }
@@ -2269,12 +2324,12 @@ function actualizarCodigoReq(){
   const v = id => document.getElementById(id)?.value || '';
   const part = (x, ph) => x ? esc(x) : `<i>${ph}</i>`;
   const el = document.getElementById('reqCodigo');
-  if(el) el.innerHTML = `${part(v('reqEmpresa'),'EMP')}-${part(v('reqArea'),'ÁREA')}-${part(v('reqSol'),'SOL')}-<i>${reqListas.siguiente}</i>`;
+  if(el) el.innerHTML = `${part(v('reqEmpresa'),'EMP')}-${part(v('reqArea'),'ÁREA')}-${part(v('reqSol'),'SOL')}-${part(v('reqCons'),'N.°')}`;
 }
 function leerFormReq(){
   const f = document.getElementById('reqForm'); if(!f) return reqBorrador;
   const d = {};
-  ['prioridad','empresa_cod','area_cod','solicitante_cod','autorizado_por','observaciones'].forEach(k=>{ d[k] = f.elements[k].value; });
+  ['fecha','consecutivo','prioridad','empresa_cod','area_cod','solicitante_cod','autorizado_por','observaciones'].forEach(k=>{ d[k] = f.elements[k].value; });
   d.items = [...document.querySelectorAll('#reqItems tbody tr')].map(tr=>{
     const o = {}; tr.querySelectorAll('[data-k]').forEach(e=>{ o[e.dataset.k] = e.value; }); return o;
   });
@@ -2287,6 +2342,8 @@ function limpiarReq(){
 
 /* Revisión en la página (el servidor vuelve a revisar todo) */
 function validarReqLocal(d){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha || '')) return ['reqFecha','Escribe una fecha válida.'];
+  if(!/^\d+$/.test(String(d.consecutivo).trim()) || Number(d.consecutivo) < 1) return ['reqCons','El consecutivo debe ser un número entero mayor que 0.'];
   if(!d.prioridad) return ['reqPrioridad','Selecciona la prioridad.'];
   if(!d.empresa_cod) return ['reqEmpresa','Selecciona la empresa.'];
   if(!d.area_cod) return ['reqArea','Selecciona el área.'];
@@ -2313,12 +2370,15 @@ async function exportarRequisicion(){
     toast(err[1], I.close); if(el){ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }
     return;
   }
-  if(!confirm(`Se guardará la requisición con el siguiente consecutivo (N.° ${reqListas.siguiente}, o el que siga si alguien exporta al mismo tiempo) y se descargará el PDF.\n\nDespués no se puede modificar. ¿Continuar?`)) return;
+  const cons = Number(d.consecutivo);
+  // Si se deja el número sugerido, el servidor asigna el siguiente libre (por si alguien exportó al mismo tiempo)
+  const envio = {...d, consecutivo: cons === reqListas.siguiente ? '' : cons};
+  if(!confirm(`Se guardará la requisición N.° ${cons} con fecha ${fmtFecha(d.fecha)} y se descargará el PDF.\n\nDespués no se puede modificar. ¿Continuar?`)) return;
   const btn = document.getElementById('btnExportarReq');
   btn.disabled = true; btn.querySelector('span').textContent = 'Guardando...';
   try{
     if(!(await prepararPDF())) return;
-    const res = await api({action:'crear_requisicion'}, d);
+    const res = await api({action:'crear_requisicion'}, envio);
     const r = res.requisicion;
     RequisicionPDF.descargar(r, reqListas.formato, reqLogo);
     toast(`Requisición ${r.codigo} guardada y descargada`);

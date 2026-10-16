@@ -483,7 +483,7 @@ function totalesImpresoras(PDO $pdo): array {
 // ---------------------------------------------------------------------------
 // Requisiciones de compra (formato MA-PC-FT-001). Listas en php/requisiciones.php
 // ---------------------------------------------------------------------------
-const REQ_MAX_ITEMS = 15;   // filas que tiene el formato
+const REQ_MAX_ITEMS = 60;   // ítems por requisición (el PDF pone 15 por página)
 
 function requisicionesConfig(): array {
     static $cfg = null;
@@ -561,7 +561,20 @@ function validarRequisicion(array $b): array {
 
     $items = [];
     $filas = is_array($b['items'] ?? null) ? $b['items'] : [];
-    if (count($filas) > REQ_MAX_ITEMS) return [null, null, 'El formato admite máximo ' . REQ_MAX_ITEMS . ' ítems.'];
+    if (count($filas) > REQ_MAX_ITEMS) return [null, null, 'Se admiten máximo ' . REQ_MAX_ITEMS . ' ítems por requisición.'];
+
+    // Fecha: la de hoy si no se envía; si se envía, debe ser una fecha real
+    $fecha = trim((string)($b['fecha'] ?? ''));
+    if ($fecha === '') $fecha = date('Y-m-d');
+    if (!fechaValida($fecha) || $fecha < '2000-01-01' || $fecha > '2100-12-31') return [null, null, 'La fecha no es válida.'];
+
+    // Consecutivo: automático si viene vacío; si se escribe a mano, entero positivo
+    $consTxt = trim((string)($b['consecutivo'] ?? ''));
+    $consecutivo = null;
+    if ($consTxt !== '') {
+        if (!ctype_digit($consTxt) || (int)$consTxt < 1 || (int)$consTxt > 999999) return [null, null, 'El consecutivo debe ser un número entero mayor que 0.'];
+        $consecutivo = (int)$consTxt;
+    }
     foreach ($filas as $i => $f) {
         if (!is_array($f)) continue;
         $cant = trim(str_replace(',', '.', (string)($f['cantidad'] ?? '')));
@@ -580,6 +593,8 @@ function validarRequisicion(array $b): array {
     if (!$items) return [null, null, 'Agrega al menos un artículo o servicio.'];
 
     return [[
+        'fecha' => $fecha,
+        'consecutivo' => $consecutivo,
         'prioridad' => $pri,
         'empresa_cod' => $empCod, 'empresa_nombre' => $cfg['empresas'][$empCod],
         'area_cod' => $areaCod, 'area_nombre' => $cfg['areas'][$areaCod],
@@ -1365,17 +1380,24 @@ switch ($action) {
         asegurarTablasRequisiciones($pdo);
         [$d, $items, $err] = validarRequisicion($body);
         if ($err) { responderError(400, $err); break; }
+        $manual = $d['consecutivo'] !== null;
+        if ($manual) {
+            $usado = $pdo->prepare("SELECT codigo FROM requisiciones WHERE consecutivo = ?");
+            $usado->execute([$d['consecutivo']]);
+            if ($c = $usado->fetchColumn()) { responderError(409, "El consecutivo {$d['consecutivo']} ya está usado (requisición $c). Escribe otro o déjalo como estaba."); break; }
+        }
         $nuevoId = null;
-        for ($intento = 0; $intento < 6 && $nuevoId === null; $intento++) {
+        $duplicadoManual = false;
+        for ($intento = 0; $intento < 6 && $nuevoId === null && !$duplicadoManual; $intento++) {
             if ($intento > 0) usleep(random_int(20000, 120000));   // espera corta antes de reintentar
             try {
                 $pdo->beginTransaction();
-                $cons = siguienteConsecutivo($pdo, true);
+                $cons = $manual ? $d['consecutivo'] : siguienteConsecutivo($pdo, true);
                 $codigo = "{$d['empresa_cod']}-{$d['area_cod']}-{$d['solicitante_cod']}-$cons";
                 $pdo->prepare("INSERT INTO requisiciones (consecutivo, codigo, fecha, prioridad, empresa_cod, empresa_nombre, area_cod, area_nombre,
                         solicitante_cod, solicitante_nombre, autorizado_por, observaciones, sol_cedula, sol_cargo, firma_nombre)
-                    VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                    ->execute([$cons, $codigo, $d['prioridad'], $d['empresa_cod'], $d['empresa_nombre'], $d['area_cod'], $d['area_nombre'],
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                    ->execute([$cons, $codigo, $d['fecha'], $d['prioridad'], $d['empresa_cod'], $d['empresa_nombre'], $d['area_cod'], $d['area_nombre'],
                         $d['solicitante_cod'], $d['solicitante_nombre'], $d['autorizado_por'], $d['observaciones'], $d['sol_cedula'], $d['sol_cargo'], $d['firma_nombre']]);
                 $id = (int)$pdo->lastInsertId();
                 $ins = $pdo->prepare("INSERT INTO requisicion_items (requisicion_id, item, cantidad, unidad, articulo, proveedor, centro_trabajo) VALUES (?,?,?,?,?,?,?)");
@@ -1388,9 +1410,13 @@ switch ($action) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 // Dos personas exportando al mismo tiempo: consecutivo duplicado (1062), bloqueo mutuo (1213)
                 // o espera de bloqueo (1205). Se reintenta con el siguiente número; cualquier otro error se reporta.
-                if (!in_array((int)($e->errorInfo[1] ?? 0), [1062, 1213, 1205], true)) throw $e;
+                $codErr = (int)($e->errorInfo[1] ?? 0);
+                if (!in_array($codErr, [1062, 1213, 1205], true)) throw $e;
+                // Un consecutivo escrito a mano que otra persona acaba de usar no se cambia solo
+                if ($manual && $codErr === 1062) $duplicadoManual = true;
             }
         }
+        if ($duplicadoManual) { responderError(409, "El consecutivo {$d['consecutivo']} acaba de ser usado por otra requisición. Escribe otro."); break; }
         if ($nuevoId === null) { responderError(409, 'No se pudo asignar el consecutivo. Intenta de nuevo.'); break; }
         echo json_encode(['ok' => true, 'requisicion' => obtenerRequisicion($pdo, $nuevoId)]);
         break;
