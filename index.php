@@ -2148,7 +2148,8 @@ function cargarScript(src){
 async function prepararPDF(){
   try{
     await cargarScript('js/jspdf.umd.min.js');
-    await cargarScript('js/requisicion-pdf.js');
+    // ?v= cambia cada vez que se modifica el archivo, así el navegador no usa una copia vieja
+    await cargarScript('js/requisicion-pdf.js?v=<?= @filemtime(__DIR__ . '/js/requisicion-pdf.js') ?: '1' ?>');
     if(!reqLogo){
       const b = await (await fetch('img/logo-coomulpinort.jpg')).blob();
       reqLogo = await new Promise(r=>{ const f = new FileReader(); f.onload = ()=>r(f.result); f.readAsDataURL(b); });

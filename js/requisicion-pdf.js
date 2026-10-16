@@ -1,26 +1,27 @@
 /*
  * PDF del FORMATO DE REQUISICIÓN DE COMPRAS (MA-PC-FT-001).
- * Reproduce la hoja "FORMATO REQUISICIONES" del Excel en hojas carta horizontales:
- * 15 ítems por página; si hay más, continúa en otra página con el mismo encabezado.
- * Observaciones y firmas van en la última página. Las celdas de etiqueta van en blanco
- * (sin el color piel del Excel) para imprimir mejor.
+ * Reproduce la hoja "FORMATO REQUISICIONES" del Excel en hojas carta horizontales, todo en blanco
+ * (sin los colores del Excel). La tabla solo tiene las filas de los ítems: con 1 ítem se dejan
+ * 5 filas (el ítem y 4 en blanco); con 2 o más, una fila por ítem. Máximo 15 por página; si hay
+ * más, continúa en otra página con el mismo encabezado. Observaciones y firmas en la última.
  * Requiere js/jspdf.umd.min.js (window.jspdf).
  */
 (function(){
-  const VERDE   = [226, 239, 217];   // REQ N° y nota
   const NEGRO   = [0, 0, 0];
 
   const fmtFecha = f => { if(!f) return ''; const [y,m,d] = String(f).slice(0,10).split('-'); return `${Number(d)}/${Number(m)}/${y}`; };
   const fmtCant = n => { const v = Number(n); return Number.isInteger(v) ? String(v) : v.toLocaleString('es-CO', {maximumFractionDigits:2}); };
 
   const POR_PAGINA = 15;
+  const FILAS_UN_ITEM = 5;   // con un solo ítem se dejan 5 filas
 
   function crear(req, formato, logo){
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'letter' });
     const M = 8, W = 279.4 - 2*M;          // margen y ancho útil
     const items = req.items || [];
-    const paginas = Math.max(1, Math.ceil(items.length / POR_PAGINA));
+    const totalFilas = items.length <= 1 ? FILAS_UN_ITEM : items.length;
+    const paginas = Math.max(1, Math.ceil(totalFilas / POR_PAGINA));
     let y = M;
     doc.setLineWidth(0.2); doc.setDrawColor(...NEGRO); doc.setTextColor(...NEGRO);
 
@@ -82,7 +83,7 @@
     const lab = (x, w, t) => celda(x, y, w, rH, t, {bold:true, size:7});
     // REQ N°
     lab(M, wEt, 'REQ N°');
-    celda(M + wEt, y, 37, rH, req.codigo, {fill:VERDE, bold:true, size:8});
+    celda(M + wEt, y, 37, rH, req.codigo, {bold:true, size:8});
     y += rH + gap;
     // Fecha · Consecutivo · Prioridad
     lab(M, wEt, 'FECHA:');
@@ -116,7 +117,8 @@
     cols.forEach(([t, w]) => { celda(x, y, w, 5, t, {bold:true, size:7}); x += w; });
     y += 5;
     const fH = 5.0, inicio = (pag - 1) * POR_PAGINA;
-    for(let i = inicio; i < inicio + POR_PAGINA; i++){
+    const fin = Math.min(totalFilas, inicio + POR_PAGINA);
+    for(let i = inicio; i < fin; i++){
       const it = items[i];
       const vals = it ? [String(i+1), fmtCant(it.cantidad), it.unidad || '', it.articulo || '', it.proveedor || '', it.centro_trabajo || '']
                       : [String(i+1), '', '', '', '', ''];
@@ -125,7 +127,7 @@
       y += fH;
     }
     // Nota (verde)
-    celda(M, y, W, 8, 'En el campo de artículo o servicio, indicar de manera clara, las caracteristicas del producto o servicio, modelo, color, material de elaboración y cualquier otra especificación importante para solicitar una correcta cotización y proceso de compra.', {fill:VERDE, italic:true, size:6.8, align:'left', pad:2});
+    celda(M, y, W, 8, 'En el campo de artículo o servicio, indicar de manera clara, las caracteristicas del producto o servicio, modelo, color, material de elaboración y cualquier otra especificación importante para solicitar una correcta cotización y proceso de compra.', {italic:true, size:6.8, align:'left', pad:2});
     y += 8 + gap;
 
     if(!ultima){
