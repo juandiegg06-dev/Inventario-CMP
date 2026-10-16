@@ -1376,6 +1376,27 @@ switch ($action) {
         echo json_encode(['requisicion' => $r]);
         break;
 
+    // Borra una requisición del historial (sus ítems se borran con ella)
+    case 'eliminar_requisicion':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        $st = $pdo->prepare("DELETE FROM requisiciones WHERE id = ?");
+        $st->execute([(int)($body['id'] ?? 0)]);
+        if (!$st->rowCount()) { responderError(404, 'La requisición ya no existe.'); break; }
+        echo json_encode(['ok' => true]);
+        break;
+
+    // Borra todo el historial de requisiciones
+    case 'vaciar_requisiciones':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        $pdo->beginTransaction();
+        $pdo->exec("DELETE FROM requisicion_items");
+        $pdo->exec("DELETE FROM requisiciones");
+        $pdo->commit();
+        echo json_encode(['ok' => true]);
+        break;
+
     // Guarda la requisición y le asigna el siguiente consecutivo (nunca se repite)
     case 'crear_requisicion':
         $pdo = getDB();

@@ -2397,6 +2397,7 @@ function pintarHistorialReq(){
   document.getElementById('reqContenido').innerHTML = `
     <div class="toolbar">
       <div class="field-ic"><span class="sic">${I.search}</span><input class="si" id="reqBuscar" type="text" placeholder="Buscar por código, consecutivo, solicitante, área, artículo o proveedor..." aria-label="Buscar requisiciones" oninput="clearTimeout(reqBusqDebounce);reqBusqDebounce=setTimeout(cargarHistorialReq,200)"></div>
+      <button class="btn btn-danger" id="btnVaciarReq" style="display:none" onclick="vaciarHistorialReq()">${I.trash}<span>Borrar todo</span></button>
     </div>
     <div class="vg-table-wrap" id="reqTabla"><div class="empty-state" style="border:none">Cargando...</div></div>`;
   cargarHistorialReq();
@@ -2407,6 +2408,7 @@ async function cargarHistorialReq(){
   const d = await api({action:'requisiciones', q});
   const rows = d.requisiciones || [];
   const cnt = document.getElementById('reqHistCount'); if(cnt && !q) cnt.textContent = rows.length;
+  const bv = document.getElementById('btnVaciarReq'); if(bv && !q) bv.style.display = rows.length ? 'inline-flex' : 'none';
   if(!rows.length){
     box.innerHTML = `<div class="empty-state" style="border:none;padding:2rem">${q ? 'Ninguna requisición coincide con la búsqueda.' : 'Todavía no hay requisiciones. Llena el formulario en “Nueva requisición” y expórtala.'}</div>`;
     return;
@@ -2420,8 +2422,29 @@ async function cargarHistorialReq(){
       <td><div class="vg-name">${esc(r.solicitante_nombre)}</div></td>
       <td style="max-width:320px"><div class="vg-name" style="font-weight:600">${esc(r.primer_item || '')}</div><div class="vg-sub">${r.total_items} ítem${r.total_items==1?'':'s'}</div></td>
       <td><span class="req-prio ${esc(r.prioridad)}">${esc(r.prioridad)}</span></td>
-      <td><div class="vg-actions"><button class="btn btn-ghost btn-sm" onclick="descargarReq(${r.id}, this)">${I.download}<span>PDF</span></button></div></td>
+      <td><div class="vg-actions">
+        <button class="btn btn-ghost btn-sm" onclick="descargarReq(${r.id}, this)">${I.download}<span>PDF</span></button>
+        <button class="btn btn-danger btn-ic btn-sm" title="Borrar del historial" aria-label="Borrar requisición ${esc(r.codigo)}" onclick="borrarReq(${r.id}, '${esc(r.codigo)}', ${r.orden})">${I.trash}</button>
+      </div></td>
     </tr>`).join('')}</tbody></table>`;
+}
+async function borrarReq(id, codigo, orden){
+  if(!confirm(`¿Borrar la requisición N.° ${orden} (${codigo}) del historial?\n\nSe borra definitivamente y no se puede recuperar. Las demás se renumeran.`)) return;
+  await api({action:'eliminar_requisicion'}, {id});
+  toast(`Requisición ${codigo} borrada`, I.trash);
+  await despuesDeBorrarReq();
+}
+async function vaciarHistorialReq(){
+  if(!confirm('¿Borrar TODO el historial de requisiciones?\n\nSe borran definitivamente y no se pueden recuperar.')) return;
+  await api({action:'vaciar_requisiciones'}, {});
+  toast('Historial de requisiciones borrado', I.trash);
+  await despuesDeBorrarReq();
+}
+/* El consecutivo sugerido puede cambiar al borrar: se recargan las listas y el historial */
+async function despuesDeBorrarReq(){
+  reqListas = await api({action:'requisicion_listas'});
+  if(reqBorrador) reqBorrador.consecutivo = undefined;
+  await cargarHistorialReq();
 }
 async function descargarReq(id, btn){
   btn.disabled = true;
