@@ -1349,7 +1349,9 @@ switch ($action) {
         $pdo = getDB();
         asegurarTablasRequisiciones($pdo);
         $q = trim($_GET['q'] ?? '');
-        $sql = "SELECT r.id, r.consecutivo, r.codigo, r.fecha, r.prioridad, r.area_nombre, r.solicitante_nombre, r.creado_at,
+        // orden = número de la requisición en el historial (1, 2, 3… según se fueron creando),
+        // independiente del consecutivo del REQ N° (que puede escribirse a mano)
+        $sql = "SELECT r.id, (SELECT COUNT(*) FROM requisiciones o WHERE o.id <= r.id) AS orden, r.consecutivo, r.codigo, r.fecha, r.prioridad, r.area_nombre, r.solicitante_nombre, r.creado_at,
                     (SELECT COUNT(*) FROM requisicion_items i WHERE i.requisicion_id = r.id) AS total_items,
                     (SELECT i.articulo FROM requisicion_items i WHERE i.requisicion_id = r.id ORDER BY i.item LIMIT 1) AS primer_item
                 FROM requisiciones r";
@@ -1361,7 +1363,7 @@ switch ($action) {
                       OR EXISTS (SELECT 1 FROM requisicion_items i WHERE i.requisicion_id = r.id AND (i.articulo LIKE ? OR i.proveedor LIKE ?))";
             $params = [$like, $like, $like, $like, $q, $like, $like];
         }
-        $st = $pdo->prepare($sql . " ORDER BY r.consecutivo DESC LIMIT 500");
+        $st = $pdo->prepare($sql . " ORDER BY r.id DESC LIMIT 500");
         $st->execute($params);
         echo json_encode(['requisiciones' => $st->fetchAll()]);
         break;

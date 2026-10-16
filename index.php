@@ -2414,7 +2414,7 @@ async function cargarHistorialReq(){
   box.innerHTML = `<table class="vgt">
     <thead><tr><th>N.°</th><th>REQ N°</th><th>Fecha</th><th>Solicitante</th><th>Artículos</th><th>Prioridad</th><th></th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
-      <td><span class="req-n">${r.consecutivo}</span></td>
+      <td><span class="req-n">${r.orden}</span></td>
       <td><div class="vg-name" style="font-family:var(--mono);font-weight:500">${esc(r.codigo)}</div><div class="vg-sub">${esc(r.area_nombre)}</div></td>
       <td class="vg-date">${fmtFecha(r.fecha)}</td>
       <td><div class="vg-name">${esc(r.solicitante_nombre)}</div></td>
