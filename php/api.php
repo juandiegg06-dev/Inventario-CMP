@@ -631,7 +631,7 @@ if (in_array($method, ['POST','PUT'])) {
 // Solo estas acciones son de consulta; todas las demás modifican datos y deben llegar por POST
 const ACCIONES_LECTURA = ['responsables','responsable','get_equipo','buscar_equipos','papelera','tareas','vigencias',
     'get_vigencia','impresoras','impresoras_totales','lecturas_impresora','stats',
-    'requisicion_listas','requisiciones','requisicion'];
+    'requisicion_listas','requisiciones','requisicion','listado_ip'];
 if ($action !== '' && !in_array($action, ACCIONES_LECTURA, true) && $method !== 'POST') {
     responderError(405, 'Esta acción solo acepta peticiones POST.');
     exit;
@@ -1321,6 +1321,29 @@ switch ($action) {
         $impresoras = totalesImpresoras($pdo);
 
         echo json_encode(compact('resp','equipos','areas','perifericos','lista_resp','lista_areas','lista_eq','por_area','por_componente','vigencias','impresoras'));
+        break;
+
+    // ----- Listado de IPs de la red (php/ips.php) -----
+    case 'listado_ip':
+        $archivo = __DIR__ . '/ips.php';
+        $cfg = is_file($archivo) ? (require $archivo) : [];
+        // Enlace de cada equipo: el 'url' del archivo (solo http/https) o http://IP
+        $conEnlace = function (array $filas): array {
+            $out = [];
+            foreach ($filas as $f) {
+                $ip = trim((string)($f['ip'] ?? ''));
+                if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) continue;
+                $url = trim((string)($f['url'] ?? ''));
+                $f['ip'] = $ip;
+                $f['url'] = preg_match('#^https?://#i', $url) ? $url : "http://$ip";
+                $out[] = $f;
+            }
+            return $out;
+        };
+        echo json_encode([
+            'administrativa' => $conEnlace($cfg['administrativa'] ?? []),
+            'planta' => $conEnlace($cfg['planta'] ?? []),
+        ]);
         break;
 
     // ----- Requisiciones de compra -----

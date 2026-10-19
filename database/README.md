@@ -43,3 +43,7 @@ Tablas `requisiciones` y `requisicion_items` (se crean solas; `requisiciones.sql
 - **REQ N°**: `EMPRESA-ÁREA-SOLICITANTE-CONSECUTIVO`, por ejemplo `CMPN-ST-44-7`.
 - **PDF**: se genera en el navegador con `js/jspdf.umd.min.js` (incluido en el proyecto, no necesita internet) y `js/requisicion-pdf.js`. El logo está en `img/logo-coomulpinort.jpg`.
 
+
+## Listado IP
+
+La pestaña "Listado IP" muestra las direcciones IP de la red (sede administrativa y planta), ordenadas por número, con buscador, botón para copiar la IP y botón "Abrir" que abre `http://IP` en otra pestaña (solo funciona desde la red de la empresa). No usa la base de datos: el listado está en `php/ips.php` (copiado de `Matriz_IPs_CMP.xlsx`). Para agregar, quitar o cambiar una IP se edita ese archivo; si un equipo usa otro puerto o https, se le agrega `'url' => 'https://IP:PUERTO'`.

@@ -487,6 +487,24 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .req-prio.BAJA{background:var(--ok-soft);color:var(--ok)}
 .req-n{font-family:var(--mono);font-size:1.05rem;font-weight:500;color:var(--c-deep)}
 
+/* ================= Listado IP ================= */
+.ip-sec{margin-bottom:1.8rem;animation:rise .4s var(--ease) both}
+.ip-sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:.8rem;margin-bottom:.7rem;flex-wrap:wrap}
+.ip-sec-h h2{font-size:1.1rem;font-weight:800;letter-spacing:-.025em;display:flex;align-items:center;gap:.55rem}
+.ip-sec-h h2 .ic{color:var(--c-deep)}
+.ip-sec-h small{font-size:.8rem;color:var(--mute)}
+.ip{font-family:var(--mono);font-size:.86rem;font-weight:500;color:var(--ink);background:var(--soft-2);border:1px solid var(--line);border-radius:8px;padding:.22rem .55rem;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s}
+.ip:hover{background:var(--accent-soft);border-color:var(--c-lime)}
+.ip-sin{color:var(--mute);font-style:italic}
+.ip-estado{display:inline-flex;align-items:center;gap:.35rem;font-size:.74rem;font-weight:700;padding:.2rem .6rem;border-radius:999px;background:var(--ok-soft);color:var(--ok)}
+.ip-estado::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.ip-estado.otro{background:var(--warn-soft);color:var(--warn)}
+.ip-abrir{display:inline-flex;align-items:center;gap:.35rem;text-decoration:none;font-size:.78rem;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border:1px solid transparent;border-radius:999px;padding:.35rem .75rem;white-space:nowrap;transition:background .15s,border-color .15s}
+.ip-abrir:hover{background:var(--accent);border-color:var(--c-lime)}
+.ip-n{color:var(--mute);font-weight:700;font-size:.8rem}
+.ip-ssid{font-size:.78rem;color:var(--mute);white-space:nowrap}
+.ip-sec .vgt td{white-space:nowrap}
+
 /* ================= Responsive ================= */
 @media (max-width:1180px){
   .search-trigger{min-width:0}
@@ -516,7 +534,9 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
   .search-trigger{display:none}
   /* Navegación inferior tipo app */
   .nav{position:fixed;left:.75rem;right:.75rem;bottom:.75rem;margin:0;justify-content:space-between;padding:5px;border-radius:22px;box-shadow:var(--sh-3);z-index:120}
-  .nav-item{flex:1;flex-direction:column;gap:.15rem;padding:.45rem .2rem;border-radius:17px;font-size:.64rem}
+  .nav{overflow-x:auto;scrollbar-width:none;justify-content:flex-start}
+  .nav::-webkit-scrollbar{display:none}
+  .nav-item{flex:1 0 auto;min-width:62px;flex-direction:column;gap:.15rem;padding:.45rem .35rem;border-radius:17px;font-size:.64rem}
   .nav-item span,.nav-item.on span{display:block}
   .nav-item .ic{width:19px;height:19px}
   .page{padding:1.5rem 1rem 7rem}
@@ -586,6 +606,7 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
       <button class="nav-item" id="btnImpresoras" onclick="loadImpresoras()"><span>Impresoras</span></button>
       <button class="nav-item" id="btnVigencias" onclick="loadVigencias()"><span>Vigencias</span></button>
       <button class="nav-item" id="btnRequisiciones" onclick="loadRequisiciones()"><span>Requisiciones</span></button>
+      <button class="nav-item" id="btnIPs" onclick="loadListadoIP()"><span>Listado IP</span></button>
       <button class="nav-item" id="btnStats" onclick="loadDashboard()"><span>Estadísticas</span></button>
     </nav>
 
@@ -865,6 +886,8 @@ const I = {
   calendar: svg('<rect x="3" y="4.5" width="18" height="16" rx="1.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>'),
   alert:    svg('<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>', 14),
   doc:      svg('<path d="M14 2H6.5A1.5 1.5 0 0 0 5 3.5v17A1.5 1.5 0 0 0 6.5 22h11a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M14 2v5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h2.5"/>'),
+  network:  svg('<rect x="9" y="2.5" width="6" height="5" rx="1"/><rect x="2.5" y="16.5" width="6" height="5" rx="1"/><rect x="15.5" y="16.5" width="6" height="5" rx="1"/><path d="M12 7.5v4.5M5.5 16.5V12h13v4.5"/>'),
+  external: svg('<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>', 15),
   download: svg('<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>', 16),
   printer:  svg('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="1.5"/><path d="M6 14h12v7H6z"/>'),
   chart:    svg('<path d="M4 20V11M12 20V4M20 20v-8"/>'),
@@ -936,6 +959,8 @@ async function api(params, body=null){
 
 function marcarNav(id){
   document.querySelectorAll('.nav .nav-item').forEach(b=>b.classList.toggle('on', b.id===id));
+  const act = id && document.getElementById(id);
+  if(act && window.innerWidth <= 760) act.scrollIntoView({block:'nearest', inline:'center'});
 }
 
 function toast(msg, icon=I.check){
@@ -2456,12 +2481,82 @@ async function descargarReq(id, btn){
   } finally { btn.disabled = false; }
 }
 
+/* ============ LISTADO IP ============ */
+let ipDatos = null;
+
+/* Ordena IPs por número (192.168.2.35 antes que 192.168.2.101) */
+const ipNum = ip => String(ip).split('.').reduce((a, n) => a * 256 + Number(n), 0);
+
+async function loadListadoIP(){
+  vistaActual = 'ips';
+  activeUser = null; vigViewActiva = false; marcarNav('btnIPs');
+  document.getElementById('rightPanel').innerHTML = `
+    <div class="view-fade">
+    ${encabezado({eyebrow:'Red', titulo:'Listado IP', sub:'Direcciones IP de la red de la sede administrativa y la planta. “Abrir” lleva a la página del equipo (funciona desde la red de la empresa).'})}
+    <div class="toolbar">
+      <div class="field-ic"><span class="sic">${I.search}</span><input class="si" id="ipBuscar" type="text" placeholder="Buscar por IP, nombre, equipo, ubicación..." aria-label="Buscar IP" oninput="pintarListadoIP()"></div>
+    </div>
+    <div id="ipContenido"><div class="empty-state">Cargando...</div></div>
+    </div>`;
+  irArriba();
+  ipDatos = await api({action:'listado_ip'});
+  pintarListadoIP();
+}
+
+function pintarListadoIP(){
+  const box = document.getElementById('ipContenido'); if(!box || !ipDatos) return;
+  const q = (document.getElementById('ipBuscar')?.value || '').trim().toLowerCase();
+  const filtra = (lista, campos) => lista
+    .filter(f => !q || campos.some(k => String(f[k] ?? '').toLowerCase().includes(q)))
+    .sort((a, b) => ipNum(a.ip) - ipNum(b.ip));
+  const adm = filtra(ipDatos.administrativa, ['ip','nombre','oficina','ssid','estado']);
+  const pla = filtra(ipDatos.planta, ['ip','equipo','ubicacion','productos']);
+  const ipCelda = ip => `<button type="button" class="ip" title="Copiar IP" onclick="copiarIP('${esc(ip)}')">${esc(ip)}</button>`;
+  const abrir = f => `<a class="ip-abrir" href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${I.external}<span>Abrir</span></a>`;
+  const nombre = n => (!n || n === 'N/A') ? `<span class="ip-sin">Sin nombre</span>` : `<span class="vg-name">${esc(n)}</span>`;
+  const seccion = (titulo, icono, total, filas, cabecera, fila) => `
+    <section class="ip-sec">
+      <div class="ip-sec-h"><h2>${icono}<span>${titulo}</span></h2><small>${filas.length === total ? total : `${filas.length} de ${total}`} IP${total==1?'':'s'}</small></div>
+      <div class="vg-table-wrap">${filas.length ? `<table class="vgt" style="min-width:760px"><thead><tr>${cabecera}</tr></thead><tbody>${filas.map(fila).join('')}</tbody></table>`
+        : '<div class="empty-state" style="border:none">Ninguna IP coincide con la búsqueda.</div>'}</div>
+    </section>`;
+  box.innerHTML =
+    seccion('Sede administrativa', I.building, ipDatos.administrativa.length, adm,
+      '<th>#</th><th>Dirección IP</th><th>Nombre</th><th>Oficina</th><th>SSID</th><th>Segmento</th><th>Estado</th><th></th>',
+      (f, i) => `<tr>
+        <td class="ip-n">${i + 1}</td>
+        <td>${ipCelda(f.ip)}</td>
+        <td>${nombre(f.nombre)}</td>
+        <td>${esc(f.oficina ?? '')}</td>
+        <td><span class="ip-ssid">${esc(f.ssid ?? '')}</span></td>
+        <td>${esc(f.segmento ?? '')}</td>
+        <td><span class="ip-estado ${String(f.estado||'').toLowerCase()==='operativo' ? '' : 'otro'}">${esc(f.estado || '—')}</span></td>
+        <td style="text-align:right">${abrir(f)}</td>
+      </tr>`) +
+    seccion('Planta', I.chip, ipDatos.planta.length, pla,
+      '<th>#</th><th>Ubicación</th><th>Equipo</th><th>Dirección IP</th><th>Productos</th><th></th>',
+      (f, i) => `<tr>
+        <td class="ip-n">${i + 1}</td>
+        <td>${esc(f.ubicacion ?? '')}</td>
+        <td><span class="vg-name">${esc(f.equipo ?? '')}</span></td>
+        <td>${ipCelda(f.ip)}</td>
+        <td>${esc(f.productos ?? '')}</td>
+        <td style="text-align:right">${abrir(f)}</td>
+      </tr>`);
+}
+
+async function copiarIP(ip){
+  try { await navigator.clipboard.writeText(ip); toast(`IP ${ip} copiada`); }
+  catch(e){ toast(`No se pudo copiar. La IP es ${ip}`, I.close); }
+}
+
 /* ============ INIT ============ */
 document.getElementById('btnTareas').innerHTML = I.kanban + '<span>Tareas</span>';
 document.getElementById('btnUsuarios').innerHTML = I.users + '<span>Usuarios</span>';
 document.getElementById('btnImpresoras').innerHTML = I.printer + '<span>Impresoras</span>';
 document.getElementById('btnVigencias').innerHTML = I.calendar + '<span>Vigencias</span>';
 document.getElementById('btnRequisiciones').innerHTML = I.doc + '<span>Requisiciones</span>';
+document.getElementById('btnIPs').innerHTML = I.network + '<span>Listado IP</span>';
 document.getElementById('btnStats').innerHTML = I.chart + '<span>Estadísticas</span>';
 document.getElementById('searchTopIcon').innerHTML = I.search;
 document.getElementById('btnBuscarM').innerHTML = I.search;
