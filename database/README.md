@@ -47,3 +47,7 @@ Tablas `requisiciones` y `requisicion_items` (se crean solas; `requisiciones.sql
 ## Listado IP
 
 La pestaña "Listado IP" muestra las direcciones IP de la red (sede administrativa y planta), ordenadas por número, con buscador, botón para copiar la IP y botón "Abrir" que abre `http://IP` en otra pestaña (solo funciona desde la red de la empresa). No usa la base de datos: el listado está en `php/ips.php` (copiado de `Matriz_IPs_CMP.xlsx`). Para agregar, quitar o cambiar una IP se edita ese archivo; si un equipo usa otro puerto o https, se le agrega `'url' => 'https://IP:PUERTO'`.
+
+## Historial de equipos
+
+Tabla `equipo_historial` (se crea sola; `equipo_historial.sql` para crearla a mano). Guarda cada movimiento de un equipo con fecha y hora: reasignaciones (de quién a quién), campos editados (antes y después), software agregado o eliminado, periféricos registrados, y envío o restauración desde la papelera. Se ve con el botón "Historial" en la ficha de cada equipo. Solo registra desde que se activó; si un equipo se borra definitivamente, su historial se borra con él.

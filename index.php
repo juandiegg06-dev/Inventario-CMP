@@ -478,6 +478,17 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .req-add:disabled{opacity:.5;cursor:not-allowed}
 .req-add-bar small{font-size:.76rem;color:var(--mute)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.hist-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist-item{display:flex;gap:.75rem;padding:.75rem 0;border-bottom:1px solid var(--line)}
+.hist-item:last-child{border-bottom:none}
+.hist-ic{width:32px;height:32px;border-radius:9px;background:var(--soft);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent-ink)}
+.hist-main{flex:1;min-width:0}
+.hist-top{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;font-size:.86rem}
+.hist-fecha{margin-left:auto;font-size:.74rem;color:var(--mute);white-space:nowrap}
+.hist-tag{font-size:.68rem;font-weight:700;padding:.1rem .5rem;border-radius:999px;background:var(--soft-2);color:var(--ink-2)}
+.hist-det{font-size:.8rem;color:var(--ink-2);margin-top:.3rem;line-height:1.5;overflow-wrap:anywhere}
+.hist-cambio span{color:var(--mute)}
+.hist-vacio{color:var(--mute)}
 .req-edit-bar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem;padding:.7rem 1rem;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--soft);font-size:.84rem}
 .req-edit-bar span{flex:1;min-width:200px}
 .req-acciones{display:flex;justify-content:flex-end;align-items:center;gap:.55rem;padding:1rem 1.5rem;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
@@ -809,6 +820,19 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
   </div>
 </div>
 
+<div class="modal-bg" id="modalHistorial" style="display:none" onclick="if(event.target===this)closeModal('modalHistorial')">
+  <div class="modal" style="max-width:600px;max-height:85vh" role="dialog" aria-modal="true" aria-labelledby="histModalTitle">
+    <div class="modal-head">
+      <h3 id="histModalTitle">Historial del equipo</h3>
+      <div class="modal-sub" id="histModalSub"></div>
+    </div>
+    <div id="histModalContent" class="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalHistorial')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Vigencia (panel lateral) -->
 <div class="modal-bg drawer" id="modalVigencia" style="display:none" onclick="if(event.target===this)closeModal('modalVigencia')">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="vigModalTitle">
@@ -881,6 +905,7 @@ const I = {
   refresh:  svg('<path d="M22 4v6h-6M2 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.6-3.4L22 10M2 14l3.9 3.4A9 9 0 0 0 20.5 15"/>', 16),
   close:    svg('<path d="M18 6 6 18M6 6l12 12"/>', 12),
   gear:     svg('<circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8 7 17M17 7l2.8-2.8"/>', 16),
+  history:  svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>'),
   pencil:   svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 15),
   kanban:   svg('<rect x="3" y="3" width="6" height="18" rx="1.2"/><rect x="10" y="3" width="6" height="11" rx="1.2"/><rect x="17" y="3" width="4" height="7" rx="1.2"/>'),
   copy:     svg('<rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'),
@@ -1244,6 +1269,7 @@ async function verUsuario(nombre){
           <div class="eq-sub">S/N: ${esc(eq.serial)||'N/A'} ${eq.tipo_equipo ? ' · '+esc(eq.tipo_equipo) : ''}${totalPCs>1 && eq.componente==='Equipo de computo' ? ` · Equipo ${idx+1} de ${totalPCs}` : ''}</div>
         </div>
         <div class="eq-head-r">
+          <button class="btn btn-ghost btn-sm" onclick="verHistorialEquipo(${eq.id})">${I.history}<span>Historial</span></button>
           <button class="btn btn-ghost btn-sm" onclick="openModalEquipo(${eq.id}, '${nombreJs}', null)">${I.pencil}<span>Editar</span></button>
           <button class="btn btn-danger btn-ic btn-sm" title="Enviar a la papelera" aria-label="Enviar a la papelera" onclick="borrarEquipo(${eq.id}, '${nombreJs}')">${I.trash}</button>
         </div>
@@ -1430,6 +1456,58 @@ function renderAsignarResults(equipos){
       </div>
       <button class="btn btn-primary btn-sm" onclick="asignarEquipoAUsuario(${e.id})"><span>Asignar</span></button>
     </div>`).join('');
+}
+
+/* ============ HISTORIAL DE CAMBIOS POR EQUIPO ============ */
+const HIST_CAMPOS = {
+  sede:'Sede', area:'Área', componente:'Componente', tipo_equipo:'Tipo de equipo', usuario_actual:'Usuario de sesión',
+  nombre_completo:'Nombre del equipo', grupo_usuario:'Grupo de usuario', marca:'Marca', modelo:'Modelo', serial:'Serial',
+  procesador:'Procesador', disco_total:'Disco total', tipo_disco:'Tipo de disco', disco_usado:'Disco usado',
+  tipo_ram:'Tipo de RAM', ram_total:'RAM total', ram_usada:'RAM usada', sistema_op:'Sistema operativo',
+  ip_local:'IP local', conexion:'Conexión', observaciones:'Observaciones', office:'Office'
+};
+function fmtFechaHora(f){
+  if(!f) return '—';
+  const [fe, ho] = String(f).split(' ');
+  return fmtFecha(fe) + (ho ? ' · ' + ho.slice(0,5) : '');
+}
+function histVal(v){ return (v === null || v === undefined || v === '') ? '<i class="hist-vacio">vacío</i>' : esc(v); }
+function histEntradaHTML(h){
+  const d = h.detalle || {};
+  const sw = s => esc(s.programa) + (s.version ? ' ' + esc(s.version) : '');
+  let titulo = '', cuerpo = '', ic = I.pencil;
+  switch(h.accion){
+    case 'reasignado': ic = I.users; titulo = 'Reasignado';
+      cuerpo = `${histVal(d.de)} → <b>${histVal(d.a)}</b>`; break;
+    case 'editado': titulo = 'Datos modificados';
+      cuerpo = (Array.isArray(d) ? d : []).map(c=>`<div class="hist-cambio"><span>${esc(HIST_CAMPOS[c.campo] || c.campo)}:</span> ${histVal(c.antes)} → <b>${histVal(c.despues)}</b></div>`).join(''); break;
+    case 'creado': ic = I.plus; titulo = 'Registrado'; cuerpo = d.responsable ? `Asignado a ${esc(d.responsable)}` : ''; break;
+    case 'eliminado': ic = I.trash; titulo = 'Enviado a la papelera'; break;
+    case 'restaurado': ic = I.refresh; titulo = 'Restaurado de la papelera'; break;
+    case 'software_agregado': ic = I.disk; titulo = 'Software agregado'; cuerpo = sw(d); break;
+    case 'software_eliminado': ic = I.disk; titulo = 'Software eliminado'; cuerpo = sw(d); break;
+    case 'software_restaurado': ic = I.disk; titulo = 'Software restaurado'; cuerpo = sw(d); break;
+    default: titulo = esc(h.accion);
+  }
+  const quien = h.es_periferico ? `<span class="hist-tag">${esc(h.componente || 'Periférico')}${h.marca ? ' ' + esc(h.marca) : ''}</span>` : '';
+  return `<li class="hist-item">
+    <div class="hist-ic">${ic}</div>
+    <div class="hist-main">
+      <div class="hist-top"><b>${titulo}</b>${quien}<span class="hist-fecha">${fmtFechaHora(h.creado_at)}</span></div>
+      ${cuerpo ? `<div class="hist-det">${cuerpo}</div>` : ''}
+    </div>
+  </li>`;
+}
+async function verHistorialEquipo(id){
+  const [eq, d] = await Promise.all([api({action:'get_equipo', id}), api({action:'historial_equipo', id})]);
+  const e = eq.equipo || {};
+  document.getElementById('histModalTitle').innerHTML = I.history + '<span>Historial del equipo</span>';
+  document.getElementById('histModalSub').textContent = `${[e.marca, e.modelo].filter(Boolean).join(' ') || 'Equipo'} · S/N: ${e.serial || 'N/A'} · Actual: ${e.responsable || 'Sin asignar'}`;
+  const rows = d.historial || [];
+  document.getElementById('histModalContent').innerHTML = rows.length
+    ? `<ul class="hist-list">${rows.map(histEntradaHTML).join('')}</ul>`
+    : '<div class="empty-state">Todavía no hay movimientos registrados. A partir de ahora se guardan las reasignaciones, cambios de datos, software y periféricos de este equipo.</div>';
+  document.getElementById('modalHistorial').style.display = 'flex';
 }
 
 async function asignarEquipoAUsuario(id){

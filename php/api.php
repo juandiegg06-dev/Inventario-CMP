@@ -101,6 +101,33 @@ SQL);
     $listo = true;
 }
 
+// ---------------------------------------------------------------------------
+// Historial de cambios por equipo (reasignaciones, ediciones, software, papelera)
+// ---------------------------------------------------------------------------
+function asegurarTablaHistorial(PDO $pdo): void {
+    static $listo = false;
+    if ($listo) return;
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `equipo_historial` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `equipo_id` int(11) NOT NULL,
+  `accion` varchar(30) NOT NULL,
+  `detalle` text DEFAULT NULL,
+  `creado_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_hist_equipo` (`equipo_id`, `creado_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+    $listo = true;
+}
+
+/** Guarda un movimiento en el historial. $detalle se guarda como JSON. */
+function registrarHistorial(PDO $pdo, int $equipoId, string $accion, $detalle = null): void {
+    asegurarTablaHistorial($pdo);
+    $pdo->prepare("INSERT INTO equipo_historial (equipo_id, accion, detalle) VALUES (?,?,?)")
+        ->execute([$equipoId, $accion, $detalle === null ? null : json_encode($detalle, JSON_UNESCAPED_UNICODE)]);
+}
+
 function responderError(int $codigo, string $msg): void {
     http_response_code($codigo);
     echo json_encode(['error' => $msg]);
@@ -631,7 +658,7 @@ if (in_array($method, ['POST','PUT'])) {
 // Solo estas acciones son de consulta; todas las demás modifican datos y deben llegar por POST
 const ACCIONES_LECTURA = ['responsables','responsable','get_equipo','buscar_equipos','papelera','tareas','vigencias',
     'get_vigencia','impresoras','impresoras_totales','lecturas_impresora','stats',
-    'requisicion_listas','requisiciones','requisicion','listado_ip'];
+    'requisicion_listas','requisiciones','requisicion','listado_ip','historial_equipo'];
 if ($action !== '' && !in_array($action, ACCIONES_LECTURA, true) && $method !== 'POST') {
     responderError(405, 'Esta acción solo acepta peticiones POST.');
     exit;
@@ -741,6 +768,20 @@ switch ($action) {
         foreach ($datos as $c => $v) { $sets[] = "`$c` = ?"; $valores[] = $v; }
         $valores[] = $id;
         $pdo->prepare("UPDATE equipos SET " . implode(', ', $sets) . " WHERE id = ?")->execute($valores);
+
+        // Historial: solo los campos que de verdad cambiaron
+        $cambios = [];
+        foreach ($datos as $c => $v) {
+            $antes = $actual[$c] === null ? '' : trim((string)$actual[$c]);
+            $despues = $v === null ? '' : trim((string)$v);
+            if ($antes === $despues) continue;
+            if ($c === 'responsable') {
+                registrarHistorial($pdo, $id, 'reasignado', ['de' => $antes, 'a' => $despues]);
+            } else {
+                $cambios[] = ['campo' => $c, 'antes' => $antes, 'despues' => $despues];
+            }
+        }
+        if ($cambios) registrarHistorial($pdo, $id, 'editado', $cambios);
         echo json_encode(['ok' => true]);
         break;
 
@@ -801,6 +842,7 @@ switch ($action) {
             $body['observaciones'] ?? null,
             $body['office'] ?? null,
         ]);
+        registrarHistorial($pdo, (int)$pdo->lastInsertId(), 'creado', ['responsable' => $body['responsable']]);
         echo json_encode(['ok' => true]);
         break;
 
@@ -822,11 +864,32 @@ switch ($action) {
         $pdo->prepare("UPDATE software SET deleted_at = ? WHERE equipo_id IN ($in) AND deleted_at IS NULL")->execute(array_merge([$ahora], $todos));
         $pdo->prepare("UPDATE vigencias SET deleted_at = ? WHERE equipo_id IN ($in) AND deleted_at IS NULL")->execute(array_merge([$ahora], $todos));
         $pdo->commit();
+        registrarHistorial($pdo, $id, 'eliminado');
         echo json_encode(['ok' => true]);
         break;
 
     // Buscar equipos de cómputo (para reasignar a otro responsable)
    // api.php (Reemplaza el case 'buscar_equipos' existente)
+    // Historial de un equipo de cómputo, incluidos los movimientos de sus periféricos
+    case 'historial_equipo':
+        $pdo = getDB();
+        asegurarTablaHistorial($pdo);
+        $id = (int)($_GET['id'] ?? 0);
+        $st = $pdo->prepare("SELECT h.id, h.equipo_id, h.accion, h.detalle, h.creado_at,
+                e.componente, e.marca, e.modelo, e.serial, (h.equipo_id <> ?) AS es_periferico
+            FROM equipo_historial h LEFT JOIN equipos e ON e.id = h.equipo_id
+            WHERE h.equipo_id = ? OR h.equipo_id IN (SELECT id FROM equipos WHERE equipo_padre_id = ?)
+            ORDER BY h.creado_at DESC, h.id DESC LIMIT 300");
+        $st->execute([$id, $id, $id]);
+        $rows = $st->fetchAll();
+        foreach ($rows as &$r) {
+            $r['detalle'] = $r['detalle'] === null ? null : json_decode($r['detalle'], true);
+            $r['es_periferico'] = (bool)$r['es_periferico'];
+        }
+        unset($r);
+        echo json_encode(['historial' => $rows]);
+        break;
+
     case 'buscar_equipos':
         $q = trim($_GET['q'] ?? '');
         $pdo = getDB();
@@ -855,7 +918,11 @@ switch ($action) {
         $pdo = getDB();
         $eq = equipoActivo($pdo, $id);
         if (!$eq || $eq['componente'] !== 'Equipo de computo') { responderError(404, 'El equipo no existe o está en la papelera.'); break; }
-        $pdo->prepare("UPDATE equipos SET responsable = ? WHERE id = ?")->execute([mb_substr($nuevoResp, 0, 150), $id]);
+        $nuevoResp = mb_substr($nuevoResp, 0, 150);
+        $pdo->prepare("UPDATE equipos SET responsable = ? WHERE id = ?")->execute([$nuevoResp, $id]);
+        if (mb_strtolower(trim((string)$eq['responsable'])) !== mb_strtolower($nuevoResp)) {
+            registrarHistorial($pdo, $id, 'reasignado', ['de' => trim((string)$eq['responsable']), 'a' => $nuevoResp]);
+        }
         echo json_encode(['ok' => true]);
         break;
 
@@ -872,11 +939,21 @@ switch ($action) {
         if ($dup->fetchColumn()) { responderError(409, 'Ese programa ya está registrado en este equipo.'); break; }
         $pdo->prepare("INSERT INTO software (equipo_id,programa,version) VALUES (?,?,?)")
             ->execute([$eqId, $programa, $version]);
-        echo json_encode(['ok'=>true, 'id'=>(int)$pdo->lastInsertId()]);
+        $swId = (int)$pdo->lastInsertId();
+        registrarHistorial($pdo, $eqId, 'software_agregado', ['programa' => $programa, 'version' => $version]);
+        echo json_encode(['ok'=>true, 'id'=>$swId]);
         break;
 
     case 'delete_software':
-        getDB()->prepare("UPDATE software SET deleted_at = NOW() WHERE id = ?")->execute([(int)($body['id'] ?? 0)]);
+        $pdo = getDB();
+        $swId = (int)($body['id'] ?? 0);
+        $sw = $pdo->prepare("SELECT equipo_id, programa, version FROM software WHERE id = ? AND deleted_at IS NULL");
+        $sw->execute([$swId]);
+        $sw = $sw->fetch();
+        $pdo->prepare("UPDATE software SET deleted_at = NOW() WHERE id = ?")->execute([$swId]);
+        if ($sw && $sw['equipo_id']) {
+            registrarHistorial($pdo, (int)$sw['equipo_id'], 'software_eliminado', ['programa' => $sw['programa'], 'version' => $sw['version']]);
+        }
         echo json_encode(['ok'=>true]);
         break;
 
@@ -970,6 +1047,7 @@ switch ($action) {
         // Solo las vigencias que se fueron junto con el equipo (las borradas antes a mano se quedan en la papelera)
         $pdo->prepare("UPDATE vigencias SET deleted_at = NULL WHERE equipo_id IN ($in) AND deleted_at >= ?")->execute(array_merge($todos, [$borradoEn]));
         $pdo->commit();
+        registrarHistorial($pdo, $id, 'restaurado');
         echo json_encode(['ok'=>true]);
         break;
 
@@ -988,6 +1066,11 @@ switch ($action) {
             break;
         }
         $pdo->prepare("UPDATE software SET deleted_at = NULL WHERE id = ?")->execute([$id]);
+        $sw = $pdo->prepare("SELECT equipo_id, programa, version FROM software WHERE id = ?");
+        $sw->execute([$id]);
+        if (($sw = $sw->fetch()) && $sw['equipo_id']) {
+            registrarHistorial($pdo, (int)$sw['equipo_id'], 'software_restaurado', ['programa' => $sw['programa'], 'version' => $sw['version']]);
+        }
         echo json_encode(['ok'=>true]);
         break;
 
@@ -1005,9 +1088,11 @@ switch ($action) {
         $todos = array_merge([$id], array_column($hijos->fetchAll(), 'id'));
         $in = implode(',', array_fill(0, count($todos), '?'));
         asegurarTablaVigencias($pdo);
+        asegurarTablaHistorial($pdo);   // antes de la transacción: CREATE TABLE la cerraría
         $pdo->beginTransaction();
         $pdo->prepare("DELETE FROM vigencias WHERE equipo_id IN ($in) AND deleted_at IS NOT NULL")->execute($todos);
         $pdo->prepare("DELETE FROM software WHERE equipo_id IN ($in)")->execute($todos);
+        $pdo->prepare("DELETE FROM equipo_historial WHERE equipo_id IN ($in)")->execute($todos);
         $pdo->prepare("DELETE FROM equipos WHERE id IN ($in)")->execute($todos);
         $pdo->commit();
         echo json_encode(['ok' => true]);
@@ -1028,7 +1113,9 @@ switch ($action) {
     case 'vaciar_papelera':
         $pdo = getDB();
         asegurarTablaVigencias($pdo);
+        asegurarTablaHistorial($pdo);
         $pdo->beginTransaction();
+        $pdo->exec("DELETE FROM equipo_historial WHERE equipo_id IN (SELECT id FROM equipos WHERE deleted_at IS NOT NULL)");
         $pdo->exec("DELETE FROM vigencias WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM software WHERE deleted_at IS NOT NULL");
         $pdo->exec("DELETE FROM equipos WHERE deleted_at IS NOT NULL");
