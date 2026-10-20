@@ -1296,6 +1296,7 @@ async function verUsuario(nombre){
                 <div class="vg-sub">${esc(v.tipo)}${v.proveedor ? ' · '+esc(v.proveedor) : ''} · Vence: ${fmtFecha(v.fecha_vencimiento)}</div>
               </div>
               ${vigBadge(v)}
+              <button class="btn btn-ghost btn-ic btn-sm" onclick="abrirModalVigencia(${v.id})" title="Editar" aria-label="Editar vigencia">${I.pencil}</button>
             </div>`).join('') || '<div class="empty-state">Sin vigencias registradas.</div>'}
             </div>
           </section>
