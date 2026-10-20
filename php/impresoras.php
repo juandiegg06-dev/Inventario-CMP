@@ -13,4 +13,5 @@
 return [
     ['ip' => '192.168.2.179', 'nombre' => 'RICOH MP C6004ex (TESORERIA)', 'ubicacion' => null],
     ['ip' => '192.168.2.35',  'nombre' => 'RICOH IM C3500 (RECEPCION)',   'ubicacion' => null],
+    ['ip' => '192.168.2.80',  'nombre' => 'CONSEJO',                      'ubicacion' => null],
 ];
