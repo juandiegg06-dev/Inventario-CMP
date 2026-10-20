@@ -1467,6 +1467,40 @@ switch ($action) {
         echo json_encode(['ok' => true, 'requisicion' => obtenerRequisicion($pdo, $nuevoId)]);
         break;
 
+    // Edita una requisición ya guardada (mismos datos e ítems; el código se rearma)
+    case 'actualizar_requisicion':
+        $pdo = getDB();
+        asegurarTablasRequisiciones($pdo);
+        $id = (int)($body['id'] ?? 0);
+        $actual = obtenerRequisicion($pdo, $id);
+        if (!$actual) { responderError(404, 'La requisición ya no existe.'); break; }
+        [$d, $items, $err] = validarRequisicion($body);
+        if ($err) { responderError(400, $err); break; }
+        $cons = $d['consecutivo'] ?? (int)$actual['consecutivo'];
+        $usado = $pdo->prepare("SELECT codigo FROM requisiciones WHERE consecutivo = ? AND id <> ?");
+        $usado->execute([$cons, $id]);
+        if ($c = $usado->fetchColumn()) { responderError(409, "El consecutivo $cons ya está usado (requisición $c). Escribe otro."); break; }
+        $codigo = "{$d['empresa_cod']}-{$d['area_cod']}-{$d['solicitante_cod']}-$cons";
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare("UPDATE requisiciones SET consecutivo=?, codigo=?, fecha=?, prioridad=?, empresa_cod=?, empresa_nombre=?, area_cod=?, area_nombre=?,
+                    solicitante_cod=?, solicitante_nombre=?, autorizado_por=?, observaciones=?, sol_cedula=?, sol_cargo=?, firma_nombre=? WHERE id=?")
+                ->execute([$cons, $codigo, $d['fecha'], $d['prioridad'], $d['empresa_cod'], $d['empresa_nombre'], $d['area_cod'], $d['area_nombre'],
+                    $d['solicitante_cod'], $d['solicitante_nombre'], $d['autorizado_por'], $d['observaciones'], $d['sol_cedula'], $d['sol_cargo'], $d['firma_nombre'], $id]);
+            $pdo->prepare("DELETE FROM requisicion_items WHERE requisicion_id = ?")->execute([$id]);
+            $ins = $pdo->prepare("INSERT INTO requisicion_items (requisicion_id, item, cantidad, unidad, articulo, proveedor, centro_trabajo) VALUES (?,?,?,?,?,?,?)");
+            foreach ($items as $n => $it) {
+                $ins->execute([$id, $n + 1, $it['cantidad'], $it['unidad'], $it['articulo'], $it['proveedor'], $it['centro_trabajo']]);
+            }
+            $pdo->commit();
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            if ((int)($e->errorInfo[1] ?? 0) === 1062) { responderError(409, "El consecutivo $cons acaba de ser usado por otra requisición. Escribe otro."); break; }
+            throw $e;
+        }
+        echo json_encode(['ok' => true, 'requisicion' => obtenerRequisicion($pdo, $id)]);
+        break;
+
     default:
         http_response_code(400); echo json_encode(['error' => 'Acción no válida']);
 }

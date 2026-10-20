@@ -478,6 +478,8 @@ legend::after{content:"";flex:1;height:1px;background:var(--line)}
 .req-add:disabled{opacity:.5;cursor:not-allowed}
 .req-add-bar small{font-size:.76rem;color:var(--mute)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.req-edit-bar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem;padding:.7rem 1rem;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--soft);font-size:.84rem}
+.req-edit-bar span{flex:1;min-width:200px}
 .req-acciones{display:flex;justify-content:flex-end;align-items:center;gap:.55rem;padding:1rem 1.5rem;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
 .req-acciones .hint{margin-right:auto;font-size:.78rem;color:var(--mute)}
 .req-prio{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;font-weight:800;padding:.2rem .6rem;border-radius:999px;background:var(--soft-2);color:var(--ink-2)}
@@ -2162,6 +2164,9 @@ let reqTab = 'nueva';
 let reqBorrador = null;        // lo escrito en el formulario, para no perderlo al cambiar de sección
 let reqLogo = null;            // logo en base64 para el PDF
 let reqBusqDebounce = null;
+let reqEditId = null;          // id de la requisición que se está editando (null = nueva)
+let reqEditCodigo = '';
+let reqBorradorNuevo = null;   // borrador de la requisición nueva, guardado mientras se edita otra
 
 function cargarScript(src){
   return new Promise((ok, mal)=>{
@@ -2194,7 +2199,7 @@ async function loadRequisiciones(){
     <div class="view-fade">
     ${encabezado({eyebrow:'Compras', titulo:'Requisiciones', sub:'Formato de requisición de compras MA-PC-FT-001. Llena las casillas y descarga el PDF; cada exportación toma el siguiente consecutivo.'})}
     <div class="seg" role="tablist">
-      <button id="reqTabNueva" role="tab" onclick="cambiarTabReq('nueva')">${I.plus}<span>Nueva requisición</span></button>
+      <button id="reqTabNueva" role="tab" onclick="cambiarTabReq('nueva')">${reqEditId ? I.pencil : I.plus}<span>${reqEditId ? 'Editando requisición' : 'Nueva requisición'}</span></button>
       <button id="reqTabHist" role="tab" onclick="cambiarTabReq('historial')">${I.calendar}<span>Historial</span><span class="eq-count" id="reqHistCount"></span></button>
     </div>
     <div id="reqContenido"></div>
@@ -2228,6 +2233,8 @@ function pintarFormReq(){
   const filas = items.map((it, i) => filaReqHTML(i, it)).join('');
 
   document.getElementById('reqContenido').innerHTML = `
+  ${reqEditId ? `<div class="req-edit-bar">${I.pencil}<span>Editando la requisición <b>${esc(reqEditCodigo)}</b>. Al guardar se reemplaza en el historial.</span>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="cancelarEdicionReq()">Cancelar edición</button></div>` : ''}
   <form class="card req-sheet" id="reqForm" novalidate onsubmit="event.preventDefault();exportarRequisicion()" oninput="reqCambio(event)" onchange="reqCambio(event)">
     <div class="req-head">
       <div class="req-logo"><img src="img/logo-coomulpinort.jpg" alt="Coomulpinort"></div>
@@ -2238,7 +2245,7 @@ function pintarFormReq(){
       <div class="req-top">
         <div class="rf span4"><label>REQ N°</label><div class="req-code"><b id="reqCodigo"></b><small>Se arma solo: empresa · área · solicitante · consecutivo</small></div></div>
         <div class="rf"><label for="reqFecha">Fecha</label><input type="date" id="reqFecha" name="fecha" required value="${esc(b.fecha || L.hoy)}"></div>
-        <div class="rf"><label for="reqCons">Consecutivo</label><input type="number" id="reqCons" name="consecutivo" min="1" step="1" inputmode="numeric" required value="${esc(b.consecutivo ?? L.siguiente)}"><small class="rf-hint">Sigue el orden (próximo: ${L.siguiente}). Puedes cambiarlo.</small></div>
+        <div class="rf"><label for="reqCons">Consecutivo</label><input type="number" id="reqCons" name="consecutivo" min="1" step="1" inputmode="numeric" required value="${esc(b.consecutivo ?? L.siguiente)}"><small class="rf-hint">${reqEditId ? 'Consecutivo de esta requisición. Puedes cambiarlo.' : `Sigue el orden (próximo: ${L.siguiente}). Puedes cambiarlo.`}</small></div>
         <div class="rf span2"><label for="reqPrioridad">Prioridad</label><select id="reqPrioridad" name="prioridad" required>${opciones(L.prioridades, b.prioridad)}</select></div>
         <div class="rf span4"><label for="reqEmpresa">Empresa</label><select id="reqEmpresa" name="empresa_cod" required>${opciones(L.empresas, def('empresa_cod', L.empresas))}</select></div>
         <div class="rf span2"><label for="reqArea">Área</label><select id="reqArea" name="area_cod" required>${opciones(L.areas, b.area_cod, true)}</select></div>
@@ -2276,9 +2283,9 @@ function pintarFormReq(){
       </div>
     </div>
     <div class="req-acciones">
-      <span class="hint">Al exportar se guarda en el historial con el consecutivo que aparece arriba.</span>
-      <button type="button" class="btn btn-ghost" onclick="limpiarReq()">Limpiar</button>
-      <button type="submit" class="btn btn-primary" id="btnExportarReq">${I.download}<span>Guardar y descargar PDF</span></button>
+      <span class="hint">${reqEditId ? 'Al guardar se actualiza en el historial y se descarga el PDF corregido.' : 'Al exportar se guarda en el historial con el consecutivo que aparece arriba.'}</span>
+      ${reqEditId ? `<button type="button" class="btn btn-ghost" onclick="cancelarEdicionReq()">Cancelar</button>` : `<button type="button" class="btn btn-ghost" onclick="limpiarReq()">Limpiar</button>`}
+      <button type="submit" class="btn btn-primary" id="btnExportarReq">${I.download}<span>${reqEditId ? 'Guardar cambios y descargar PDF' : 'Guardar y descargar PDF'}</span></button>
     </div>
   </form>`;
   document.querySelectorAll('#reqItems textarea').forEach(autoAltura);
@@ -2398,6 +2405,7 @@ async function exportarRequisicion(){
     return;
   }
   const cons = Number(d.consecutivo);
+  if(reqEditId) return guardarEdicionReq(d, cons);
   // Si se deja el número sugerido, el servidor asigna el siguiente libre (por si alguien exportó al mismo tiempo)
   const envio = {...d, consecutivo: cons === reqListas.siguiente ? '' : cons};
   if(!confirm(`Se guardará la requisición N.° ${cons} con fecha ${fmtFecha(d.fecha)} y se descargará el PDF.\n\nDespués no se puede modificar. ¿Continuar?`)) return;
@@ -2416,6 +2424,54 @@ async function exportarRequisicion(){
   } finally {
     const b2 = document.getElementById('btnExportarReq');
     if(b2){ b2.disabled = false; b2.querySelector('span').textContent = 'Guardar y descargar PDF'; }
+  }
+}
+
+/* ---- Edición de requisiciones guardadas ---- */
+async function editarReq(id, btn){
+  if(btn) btn.disabled = true;
+  try{
+    const d = await api({action:'requisicion', id});
+    const r = d.requisicion;
+    if(!reqEditId) reqBorradorNuevo = reqBorrador;   // no perder lo que se llevaba de una nueva
+    reqEditId = r.id; reqEditCodigo = r.codigo;
+    reqBorrador = {
+      fecha: r.fecha, consecutivo: r.consecutivo, prioridad: r.prioridad, empresa_cod: r.empresa_cod,
+      area_cod: r.area_cod, solicitante_cod: String(r.solicitante_cod), autorizado_por: r.autorizado_por,
+      observaciones: r.observaciones || '',
+      items: (r.items || []).map(it => ({cantidad: String(Number(it.cantidad)), unidad: it.unidad || '', articulo: it.articulo,
+        proveedor: it.proveedor || '', centro_trabajo: it.centro_trabajo || ''}))
+    };
+    reqTab = 'nueva';
+    loadRequisiciones();
+  } finally { if(btn) btn.disabled = false; }
+}
+function salirEdicionReq(){
+  reqEditId = null; reqEditCodigo = '';
+  reqBorrador = reqBorradorNuevo; reqBorradorNuevo = null;
+}
+function cancelarEdicionReq(){
+  if(!confirm('¿Descartar los cambios de esta requisición?')) return;
+  salirEdicionReq();
+  reqTab = 'historial';
+  loadRequisiciones();
+}
+async function guardarEdicionReq(d, cons){
+  if(!confirm(`Se guardarán los cambios de la requisición ${reqEditCodigo} (N.° ${cons}) y se descargará el PDF corregido. ¿Continuar?`)) return;
+  const btn = document.getElementById('btnExportarReq');
+  btn.disabled = true; btn.querySelector('span').textContent = 'Guardando...';
+  try{
+    if(!(await prepararPDF())) return;
+    const res = await api({action:'actualizar_requisicion'}, {...d, id: reqEditId});
+    const r = res.requisicion;
+    RequisicionPDF.descargar(r, reqListas.formato, reqLogo);
+    toast(`Requisición ${r.codigo} actualizada`);
+    salirEdicionReq();
+    reqTab = 'historial';
+    loadRequisiciones();
+  } finally {
+    const b2 = document.getElementById('btnExportarReq');
+    if(b2){ b2.disabled = false; b2.querySelector('span').textContent = 'Guardar cambios y descargar PDF'; }
   }
 }
 
@@ -2450,6 +2506,7 @@ async function cargarHistorialReq(){
       <td style="max-width:320px"><div class="vg-name" style="font-weight:600">${esc(r.primer_item || '')}</div><div class="vg-sub">${r.total_items} ítem${r.total_items==1?'':'s'}</div></td>
       <td><span class="req-prio ${esc(r.prioridad)}">${esc(r.prioridad)}</span></td>
       <td><div class="vg-actions">
+        <button class="btn btn-ghost btn-ic btn-sm" title="Editar" aria-label="Editar requisición ${esc(r.codigo)}" onclick="editarReq(${r.id}, this)">${I.pencil}</button>
         <button class="btn btn-ghost btn-sm" onclick="descargarReq(${r.id}, this)">${I.download}<span>PDF</span></button>
         <button class="btn btn-danger btn-ic btn-sm" title="Borrar del historial" aria-label="Borrar requisición ${esc(r.codigo)}" onclick="borrarReq(${r.id}, '${esc(r.codigo)}', ${r.orden})">${I.trash}</button>
       </div></td>
@@ -2459,12 +2516,14 @@ async function borrarReq(id, codigo, orden){
   if(!confirm(`¿Borrar la requisición N.° ${orden} (${codigo}) del historial?\n\nSe borra definitivamente y no se puede recuperar. Las demás se renumeran.`)) return;
   await api({action:'eliminar_requisicion'}, {id});
   toast(`Requisición ${codigo} borrada`, I.trash);
+  if(reqEditId === id) salirEdicionReq();
   await despuesDeBorrarReq();
 }
 async function vaciarHistorialReq(){
   if(!confirm('¿Borrar TODO el historial de requisiciones?\n\nSe borran definitivamente y no se pueden recuperar.')) return;
   await api({action:'vaciar_requisiciones'}, {});
   toast('Historial de requisiciones borrado', I.trash);
+  if(reqEditId) salirEdicionReq();
   await despuesDeBorrarReq();
 }
 /* El consecutivo sugerido puede cambiar al borrar: se recargan las listas y el historial */
