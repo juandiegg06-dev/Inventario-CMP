@@ -122,5 +122,6 @@ return [
     'centros_trabajo' => [
         'SEDE ADMINISTRATIVA',
         'SEDE PLANTA',
+        'TRANSVERSAL',   // aplica a ambas sedes
     ],
 ];
