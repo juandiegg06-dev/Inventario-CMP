@@ -38,7 +38,7 @@ Tablas `requisiciones` y `requisicion_items` (se crean solas; `requisiciones.sql
 - **Listas** (empresas, áreas, solicitantes, autorizado por, prioridades, unidades y centros de trabajo): se editan en `php/requisiciones.php`. Cada requisición guarda una copia de los nombres, así que cambiar una lista no altera las ya exportadas.
 - **Consecutivo**: la página propone el siguiente número (uno más que el mayor usado) y se puede cambiar a mano; nunca se acepta un número ya usado. Si se deja el propuesto y dos personas exportan al mismo tiempo, cada una recibe uno distinto. `consecutivo_inicial` en `php/requisiciones.php` define el número de la primera.
 - **Fecha**: por defecto la del día; se puede elegir otra en el calendario.
-- **Ítems**: se empieza con uno y se agregan con el botón +, hasta 60. En el PDF la tabla tiene 15 filas por página, como el formato; si hay más de 15 ítems, continúa en otra página (observaciones y firmas van en la última).
+- **Ítems**: se empieza con uno y se agregan con el botón +, hasta 60. En el PDF la tabla solo lleva las filas necesarias: con 1 ítem, el ítem y 3 filas en blanco; con 2 o más, una fila por ítem sin filas en blanco. Máximo 15 por página; si hay más, continúa en otra página (observaciones y firmas van en la última).
 - **PDF sin colores**: todo sale en blanco y negro (solo el logo tiene color).
 - **REQ N°**: `EMPRESA-ÁREA-SOLICITANTE-CONSECUTIVO`, por ejemplo `CMPN-ST-44-7`.
 - **PDF**: se genera en el navegador con `js/jspdf.umd.min.js` (incluido en el proyecto, no necesita internet) y `js/requisicion-pdf.js`. El logo está en `img/logo-coomulpinort.jpg`.

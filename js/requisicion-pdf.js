@@ -1,8 +1,9 @@
 /*
  * PDF del FORMATO DE REQUISICIÓN DE COMPRAS (MA-PC-FT-001).
  * Reproduce la hoja "FORMATO REQUISICIONES" del Excel en hojas carta horizontales, todo en blanco
- * (sin los colores del Excel). La tabla tiene siempre 15 filas por página, como el formato; si hay
- * más de 15 ítems, continúa en otra página con el mismo encabezado. Observaciones y firmas en la última.
+ * (sin los colores del Excel). La tabla solo lleva las filas necesarias: con 1 ítem, el ítem y 3 filas
+ * en blanco; con 2 o más, una fila por ítem sin filas en blanco. Máximo 15 por página; si hay más,
+ * continúa en otra página con el mismo encabezado. Observaciones y firmas en la última.
  * Requiere js/jspdf.umd.min.js (window.jspdf).
  */
 (function(){
@@ -12,14 +13,15 @@
   const fmtCant = n => { const v = Number(n); return Number.isInteger(v) ? String(v) : v.toLocaleString('es-CO', {maximumFractionDigits:2}); };
 
   const POR_PAGINA = 15;
+  const BLANCAS_UN_ITEM = 3;   // con un solo ítem se dejan 3 filas en blanco debajo
 
   function crear(req, formato, logo){
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'letter' });
     const M = 8, W = 279.4 - 2*M;          // margen y ancho útil
     const items = req.items || [];
-    const paginas = Math.max(1, Math.ceil(items.length / POR_PAGINA));
-    const totalFilas = paginas * POR_PAGINA;   // 15 filas por página, las sobrantes en blanco
+    const totalFilas = items.length <= 1 ? 1 + BLANCAS_UN_ITEM : items.length;
+    const paginas = Math.max(1, Math.ceil(totalFilas / POR_PAGINA));
     let y = M;
     doc.setLineWidth(0.2); doc.setDrawColor(...NEGRO); doc.setTextColor(...NEGRO);
 
